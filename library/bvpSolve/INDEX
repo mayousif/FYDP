@@ -1,0 +1,16 @@
+bvpSolve-package        Solvers for Boundary Value Problems (BVP) of
+                        Ordinary Differential Equations
+bvpcol                  Solves multipoint boundary value problems of
+                        ordinary differential equations or differential
+                        algebraic equations, using a collocation
+                        method.
+bvpshoot                Solver for two-point boundary value problems of
+                        ordinary differential equations, using the
+                        single shooting method
+bvptwp                  Solves two-point boundary value problems of
+                        ordinary differential equations, using a
+                        mono-implicit Runge-Kutta formula
+diagnostics.bvpSolve    Prints Diagnostic Characteristics of BVP
+                        Solvers
+plot.bvpSolve           Plot and Print Methods for Output of bvp
+                        solvers

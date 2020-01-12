@@ -1,0 +1,17 @@
+shinytest-package	shinytest
+dependenciesInstalled	dependenciesInstalled
+diffviewer_widget	diffviewer_widget
+expectUpdate	expectUpdate
+expect_pass	expect_pass
+installDependencies	installDependencies
+recordTest	recordTest
+sd_findWidget	sd_findWidget
+ShinyDriver	ShinyDriver
+shinytest	shinytest
+snapshotCompare	snapshotCompare
+snapshotUpdate	snapshotCompare
+testApp	testApp
+textTestDiff	textTestDiff
+viewTestDiff	viewTestDiff
+viewTestDiffWidget	viewTestDiffWidget
+Widget	Widget

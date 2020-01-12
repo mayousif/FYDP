@@ -1,0 +1,893 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><title>R: Solves multipoint boundary value problems of ordinary...</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<link rel="stylesheet" type="text/css" href="R.css" />
+</head><body>
+
+<table width="100%" summary="page for bvpcol {bvpSolve}"><tr><td>bvpcol {bvpSolve}</td><td style="text-align: right;">R Documentation</td></tr></table>
+
+<h2>
+Solves multipoint boundary value problems of ordinary differential equations or differential algebraic equations, using a collocation method.
+</h2>
+
+<h3>Description</h3>
+
+<p>Solves Boundary Value Problems For Ordinary Differential Equations (ODE)
+or semi-explicit Differential-Algebraic Equations (DAE) with index at most 2.
+</p>
+<p>It is possible to solve stiff ODE systems, by using an automatic continuation strategy
+</p>
+<p>This is an implementation of the fortran codes colsys.f, colnew.f and coldae.f written by
+respectively U. Ascher, J. christiansen  and R.D. Russell (colsys), 
+U. Ascher and G. Bader (colnew) and U. Ascher and C. Spiteri.
+</p>
+<p>The continuation strategy is an implementation of the fortran code colmod
+written by J.R. Cash, M.H. Wright and F. Mazzia.
+</p>
+
+
+<h3>Usage</h3>
+
+<pre>
+bvpcol (yini = NULL, x, func, yend = NULL, parms = NULL, 
+        order = NULL, ynames = NULL, xguess = NULL, yguess = NULL, 
+        jacfunc = NULL, bound = NULL, jacbound = NULL, 
+        leftbc = NULL, posbound = NULL, islin = FALSE, nmax = 1000, 
+        ncomp = NULL, atol = 1e-8, colp = NULL, bspline = FALSE,
+        fullOut = TRUE, dllname = NULL, initfunc = dllname, 
+        rpar = NULL, ipar = NULL, nout = 0, outnames = NULL,
+        forcings = NULL, initforc = NULL, fcontrol = NULL, 
+        verbose = FALSE, epsini = NULL, eps = epsini, dae = NULL, ...)
+</pre>
+
+
+<h3>Arguments</h3>
+
+<table summary="R argblock">
+<tr valign="top"><td><code>yini </code></td>
+<td>
+<p>either a vector with the initial (state) variable values for
+the ODE system, or <code>NULL</code>.
+</p>
+<p>If <code>yini</code> is a vector, use <code>NA</code> for an
+initial value which is not specified. 
+</p>
+<p>If <code>yini</code> has a
+<code>names</code> attribute, the names will be available within <code>func</code> and
+used to label the output matrix.
+</p>
+<p>If <code>yini = NULL</code>, then the boundary conditions must be specified
+via function <code>bound</code>;
+if not <code>NULL</code> then <code>yend</code> should also be not <code>NULL</code>.
+</p>
+</td></tr>
+<tr valign="top"><td><code>x </code></td>
+<td>
+<p>sequence of the independent variable for which output is wanted;
+the first value of <code>x</code> must be the initial value (at which
+<code>yini</code> is defined), the final value the end condition (at which
+<code>yend</code> is defined).
+</p>
+</td></tr>
+<tr valign="top"><td><code>func </code></td>
+<td>
+<p>either an <span style="font-family: Courier New, Courier; color: #666666;"><b>R</b></span>-function that computes the values of the
+derivatives in the ODE system (the model definition) at point <code>x</code>,
+or a character string giving the name of a compiled function in a
+dynamically loaded shared library.
+</p>
+<p>If <code>func</code> is an <span style="font-family: Courier New, Courier; color: #666666;"><b>R</b></span>-function, it must be defined as:
+<code>func = function(x, y, parms,...)</code>. <code>x</code> is the current point of
+the independent variable in the integration, <code>y</code> is the current
+estimate of the (state) variables in the ODE system. If the initial
+values <code>yini</code> has a names attribute, the names will be available
+inside <code>func</code>.  <code>parms</code> is a vector or list of parameters;
+... (optional) are any other arguments passed to the function.
+</p>
+<p>The return value of <code>func</code> should be a list, whose first element is a
+vector containing the values of the equations. In case where the equations
+are first-order, this will be the derivatives of <code>y</code> with respect to
+<code>x</code>. After this can come global values that are required at
+each point in <code>x</code>.
+</p>
+<p>If the problem is a DAE, then the algebraic equations should be the last.
+</p>
+<p>If <code>func</code> is a string, then <code>dllname</code> must give the name of the
+shared library (without extension) which must be loaded before
+<code>bvptwp</code> is called. See package vignette &quot;bvpSolve&quot; for more details.
+</p>
+</td></tr>
+<tr valign="top"><td><code>yend </code></td>
+<td>
+<p>either a vector with the final (state) variable values for the
+ODE system, or <code>NULL</code>;
+</p>
+<p>if <code>yend</code> is a vector, use <code>NA</code>
+for a final value which is not specified.
+</p>
+<p>If <code>yend</code> has a  <code>names</code> attribute, and <code>yini</code> does not,
+the names will be available within the functions and 
+used to label the output matrix.
+</p>
+<p>If <code>yend = NULL</code>, then the boundary conditions must be specified
+via function <code>bound</code>; 
+if not <code>NULL</code> then <code>yini</code> should also be not <code>NULL</code>.
+</p>
+</td></tr>
+<tr valign="top"><td><code>parms </code></td>
+<td>
+<p>vector or a list with parameters passed to <code>func</code>,
+<code>jacfunc</code>, <code>bound</code> and <code>jacbound</code> (if present).
+</p>
+<p>If <code>eps</code> is given a value then it should be the **first** element in
+<code>parms</code>.
+</p>
+</td></tr>
+<tr valign="top"><td><code>epsini </code></td>
+<td>
+<p>the initial value of the continuation parameter. If
+<code>NULL</code> and <code>eps</code> is given a value, then <code>epsini</code> takes
+the default starting value of 0.5. For many singular perturbation type
+problems, the choice of 0.1 &lt; <code>eps</code> &lt; 1 represents a (fairly) easy
+problem. The user should attempt to specify an initial
+problem that is not &lsquo;too&rsquo; challenging.
+<code>epsini</code> must be initialised strictly less than 1 and greater than 0.
+</p>
+</td></tr>
+<tr valign="top"><td><code>eps </code></td>
+<td>
+<p>the desired value of precision for which the user would like
+to solve the problem. <code>eps</code> must be less than or equal to
+<code>epsini</code>. If this is given a value, it must be the first value in
+<code>parms</code>.
+</p>
+</td></tr>
+<tr valign="top"><td><code>ynames </code></td>
+<td>
+<p>The names of the variables; used to label the output, and
+avaliable within the functions.
+</p>
+<p>If <code>ynames</code> is <code>NULL</code>, names can also be passed via <code>yini</code>,  
+<code>yend</code> or <code>yguess</code>.
+</p>
+</td></tr>
+<tr valign="top"><td><code>xguess </code></td>
+<td>
+<p>Initial grid <code>x</code>, a vector. 
+If <code>xguess</code> is given, so should <code>yguess</code> be.
+</p>
+<p>Supplying <code>xguess</code> and <code>yguess</code>, based on results from a previous
+(simpler) BVP-ODE can be used for model continuation, see example 2 of
+<code>bvptwp</code>.
+</p>
+</td></tr>
+<tr valign="top"><td><code>yguess </code></td>
+<td>
+<p>First guess values of <code>y</code>, corresponding to initial grid
+<code>xguess</code>; a matrix with number of rows equal to the number of
+variables, and whose number of columns equals the length of <code>xguess</code>.
+</p>
+<p>if the rows of <code>yguess</code> have a names attribute, the names will be 
+available within the functions and used to label the output matrix.
+</p>
+<p>It is also allowed to pass the output of a previous run for continuation.
+This will use the information that is stored in the attributes 
+<code>istate</code> and <code>rstate</code>. It will only work when for the previous 
+run, <code>fullOut</code> was set equal to <code>TRUE</code> (the default).
+In this case, <code>xguess</code> need not be provided.
+</p>
+<p>See example 3b.
+</p>
+</td></tr>
+<tr valign="top"><td><code>jacfunc </code></td>
+<td>
+<p>jacobian (optional) - either an <span style="font-family: Courier New, Courier; color: #666666;"><b>R</b></span>-function that evaluates the
+jacobian of <code>func</code> at point <code>x</code>, or a string with the name of a
+function or subroutine in <code>dllname</code> that computes the Jacobian
+(see vignette <code>"bvpSolve"</code> for more about this option).
+</p>
+<p>If <code>jacfunc</code> is an <span style="font-family: Courier New, Courier; color: #666666;"><b>R</b></span>-function, it must be defined as:
+<code>jacfunc = function(x, y, parms,...)</code>.
+It should return the partial derivatives of <code>func</code> with respect to
+<code>y</code>, i.e. df(i,j) = dfi/dyj. See last example.
+</p>
+<p>If <code>jacfunc</code> is <code>NULL</code>, then a numerical approximation using
+differences is used. This is the default.
+</p>
+</td></tr>
+<tr valign="top"><td><code>bound </code></td>
+<td>
+<p>boundary function (optional) - only if <code>yini</code> and
+<code>yend</code> are not available. Either an <span style="font-family: Courier New, Courier; color: #666666;"><b>R</b></span> function that evaluates
+the i-th boundary element at point <code>x</code>, or a string with the name of a
+function or subroutine in <code>dllname</code> that computes the boundaries
+(see vignette <code>"bvpSolve"</code> for more about this option).
+</p>
+<p>If <code>bound</code> is an <span style="font-family: Courier New, Courier; color: #666666;"><b>R</b></span>-function, it should be defined as:
+<code>bound = function(i, y, parms, ...)</code>. It should return the i-th
+boundary condition. See last example.
+</p>
+</td></tr>
+<tr valign="top"><td><code>jacbound </code></td>
+<td>
+<p>jacobian of the boundary function (optional) - only if
+<code>bound</code> is defined. Either an <span style="font-family: Courier New, Courier; color: #666666;"><b>R</b></span> function that evaluates
+the gradient of the i-th boundary element with respect to the state
+variables, at point <code>x</code>, or a string with the name of a
+function or subroutine in <code>dllname</code> that computes the boundary jacobian
+(see vignette <code>"bvpSolve"</code> for more about this option).
+</p>
+<p>If <code>jacbound</code> is an <span style="font-family: Courier New, Courier; color: #666666;"><b>R</b></span>-function, it should be defined as:
+<code>jacbound = function(i, y, parms, ...)</code>.
+It should return the gradient of the i-th boundary condition.
+See examples.
+</p>
+<p>If <code>jacbound</code> is <code>NULL</code>, then a numerical approximation using
+differences is used. This is the default.
+</p>
+</td></tr>
+<tr valign="top"><td><code>leftbc </code></td>
+<td>
+<p>only if <code>yini</code> and <code>yend</code> are not available and
+<code>posbound</code> is not specified: the number of left boundary conditions.
+</p>
+</td></tr>
+<tr valign="top"><td><code>posbound </code></td>
+<td>
+<p>only used if <code>bound</code> is given: a vector with the position 
+(in the mesh) of the boundary conditions - its values should be sorted - and 
+it should be within the range of <code>x</code>;
+(posbound corresponds to fortran input &quot;Zeta&quot; in the colnew/colsys 
+FORTRAN codes.  )
+See last example.
+Note that two-point boundary value problems can also be specified via 
+<code>leftbc</code> (which is simpler). 
+</p>
+</td></tr>
+<tr valign="top"><td><code>islin </code></td>
+<td>
+<p>set to <code>TRUE</code> if the problem is linear - this will
+speed up the simulation.
+</p>
+</td></tr>
+<tr valign="top"><td><code>nmax </code></td>
+<td>
+<p>maximal number of subintervals during the calculation.
+</p>
+</td></tr>
+<tr valign="top"><td><code>order </code></td>
+<td>
+<p>the order of each derivative in <code>func</code>. The default is that
+all derivatives are 1-st order, in which case <code>order</code> can be set = 
+<code>NULL</code>.
+</p>
+<p>For higher-order derivatives, specifying the order can improve computational
+efficiency, but this interface is more complex. 
+</p>
+<p>If <code>order</code> is not <code>NULL</code>, the number of equations in <code>func</code> 
+must equal the length of <code>order</code>; the summed values of <code>order</code>
+must equal the number of variables (ncomp). 
+The jacobian as specified in <code>jacfunc</code>
+must have number of rows = number of equations and number of columns = number 
+of variables.                            
+<code>bound</code> and <code>jacbound</code> remain defined in the number of variables.
+See example 3 and 3b. 
+</p>
+</td></tr>   
+<tr valign="top"><td><code>ncomp </code></td>
+<td>
+<p>used if the model is specified by compiled code, the number of
+components (or equations). See package vignette <code>"bvpSolve"</code>.
+</p>
+<p>Also to be used if the boundary conditions are specified by <code>bound</code>, and 
+there is no <code>yguess</code>
+</p>
+</td></tr>
+<tr valign="top"><td><code>atol </code></td>
+<td>
+<p> error tolerance, a scalar.
+</p>
+</td></tr>
+<tr valign="top"><td><code>colp </code></td>
+<td>
+<p>number of collocation points per subinterval.
+</p>
+</td></tr>
+<tr valign="top"><td><code>bspline </code></td>
+<td>
+<p>if <code>FALSE</code>, then code colnew is used the default, 
+if <code>TRUE</code>, then fortran code colsys is used. Code colnew 
+incorporates a new basis representation, while colsys uses b-splines.
+</p>
+</td></tr>
+<tr valign="top"><td><code>fullOut </code></td>
+<td>
+<p>if set to <code>TRUE</code>, then the collocation output required
+e.g. for continuation will be returned in attributes <code>rwork</code> and 
+<code>iwork</code>. Use <code>attributes(out)\$rwork, attributes(out)\$rwork</code> 
+to see their contents
+</p>
+</td></tr>
+<tr valign="top"><td><code>dllname </code></td>
+<td>
+<p>a string giving the name of the shared library
+(without extension) that contains all the compiled function or
+subroutine definitions referred to in <code>func</code>, <code>jacfunc</code>,
+<code>bound</code> and  <code>jacbound</code>.  Note that ALL these subroutines
+must be defined in the shared library; it is not allowed to merge R-functions
+with compiled functions.
+</p>
+<p>See package vignette <code>"bvpSolve"</code> or deSolve's package vignette
+<code>"compiledCode"</code>.
+</p>
+</td></tr>
+<tr valign="top"><td><code>initfunc </code></td>
+<td>
+<p>if not <code>NULL</code>, the name of the initialisation function
+(which initialises values of parameters), as provided in
+&lsquo;<span class="file">dllname</span>&rsquo;. See package vignette <code>"bvpSolve"</code>.
+</p>
+</td></tr>
+<tr valign="top"><td><code>rpar </code></td>
+<td>
+<p>only when &lsquo;<span class="file">dllname</span>&rsquo; is specified: a vector with
+double precision values passed to the dll-functions whose names are
+specified by <code>func</code> and <code>jacfunc</code>.
+</p>
+</td></tr>
+<tr valign="top"><td><code>ipar </code></td>
+<td>
+<p>only when &lsquo;<span class="file">dllname</span>&rsquo; is specified: a vector with
+integer values passed to the dll-functions whose names are specified
+by <code>func</code> and <code>jacfunc</code>.
+</p>
+</td></tr>
+<tr valign="top"><td><code>nout </code></td>
+<td>
+<p>only used if <code>dllname</code> is specified and the model is
+defined in compiled code: the number of output variables calculated
+in the compiled function <code>func</code>, present in the shared
+library. Note: it is not automatically checked whether this is
+indeed the number of output variables calculated in the dll - you have
+to perform this check in the code. See deSolve's package vignette
+<code>"compiledCode"</code>.
+</p>
+</td></tr>
+<tr valign="top"><td><code>outnames </code></td>
+<td>
+<p>only used if function is specified in compiled code and 
+<code>nout</code> &gt; 0: the names of output variables calculated in the compiled 
+function. These names will be used to label the output matrix.
+The length of <code>outnames</code> should be = <code>nout</code>.
+</p>
+</td></tr>
+<tr valign="top"><td><code>forcings </code></td>
+<td>
+<p>only used if &lsquo;<span class="file">dllname</span>&rsquo; is specified: a list with
+the forcing function data sets, each present as a two-columned matrix,
+with (time,value); interpolation outside the interval
+[min(<code>times</code>), max(<code>times</code>)] is done by taking the value at
+the closest data extreme. This feature is included for consistency with
+the initial value problem solvers from package <code>deSolve</code>.
+</p>
+<p>See package vignette <code>"compiledCode"</code> from package <code>deSolve</code>.
+</p>
+</td></tr>
+<tr valign="top"><td><code>initforc </code></td>
+<td>
+<p>if not <code>NULL</code>, the name of the forcing function
+initialisation function, as provided in
+&lsquo;<span class="file">dllname</span>&rsquo;. It MUST be present if <code>forcings</code> has been given a
+value.
+</p>
+<p>See package vignette <code>"compiledCode"</code> from package <code>deSolve</code>.
+</p>
+</td></tr>
+<tr valign="top"><td><code>fcontrol </code></td>
+<td>
+<p>A list of control parameters for the forcing functions.
+</p>
+<p>See package vignette <code>"compiledCode"</code> from package <code>deSolve</code>.
+</p>
+</td></tr>
+<tr valign="top"><td><code>verbose </code></td>
+<td>
+<p>when <code>TRUE</code>, writes messages (warnings) to the screen.
+</p>
+</td></tr>
+<tr valign="top"><td><code>dae </code></td>
+<td>
+<p>if the problem is a DAE, should be a list containing   the  
+<code>index</code> of the problem and the number of algebraic equations <code>nalg</code>.
+</p>
+<p>See example 5
+</p>
+</td></tr>
+<tr valign="top"><td><code>... </code></td>
+<td>
+<p>additional arguments passed to the model functions.
+</p>
+</td></tr>
+</table>
+
+
+<h3>Details</h3>
+
+<p>If <code>eps</code> does not have a value and <code>dae</code> = NULL, 
+then the method is based on an implementation
+of the Collocation methods called &quot;colnew&quot; and
+&quot;colsys&quot; to solve multi-point boundary value problems of ordinary
+differential equations.
+</p>
+<p>The ODEs and boundary conditions are made available through the
+user-provided routines, <code>func</code> and vectors <code>yini</code> and <code>yend</code>
+or (optionally) <code>bound</code>. <code>bvpcol</code> can also solve multipoint 
+boundary value problems (see one but last example).
+</p>
+<p>The corresponding partial derivatives are optionally available through the
+user-provided routines, <code>jacfunc</code> and <code>jacbound</code>. Default is that
+they are automatically generated by <span style="font-family: Courier New, Courier; color: #666666;"><b>R</b></span>, using numerical differences.
+</p>
+<p>The user-requested tolerance is provided through <code>atol</code>.
+</p>
+<p>If the function terminates because the maximum
+number of subintervals was exceeded, then it is recommended that
+'the program be run again with a larger value for this maximum.'
+</p>
+<p>If <code>eps</code> does have a value, then the method is based on an implementation
+of the Collocation methods called &quot;colmod&quot;.
+The type of problems which this is designed to solve typically
+involve a small positive parameter 0 &lt; eps &lt;&lt; 1.
+As eps becomes progressively smaller, the problem normally becomes
+increasingly difficult to approximate numerically (for example, due
+to the appearance of narrow transition layers in the profile of the
+analytic solution).
+</p>
+<p>The idea of continuation is to solve a chain of problems in which the
+parameter eps decreases monotonically towards some desired value.
+That is, a sequence of problems is attempted to be solved:
+</p>
+<p>epsini  &gt; eps1  &gt; eps2  &gt; eps3  &gt;  .....  &gt; eps  &gt; 0
+</p>
+<p>where <code>epsini</code> is a user provided starting value and <code>eps</code> is a
+user desired final value for the parameter.
+</p>
+<p>If <code>dae</code> is not NULL, then it is assumed that a DAE has to be solved.
+In that case, <code>dae</code> should contain give the <code>index</code> of the DAE and the number of algebraic
+equations (<code>nalg</code>).
+</p>
+<p>(this part comes from the comments in the code coldae).
+With respect to the dae, it should be noted that the code does not explicitly
+check the index of the problem, so if the index is &gt; 2 then the code will
+not work well. 
+The number of boundary conditions required is independent
+of the index. it is the user's responsibility to ensure
+that these conditions are consistent with the constraints.
+The conditions at the left end point must include
+a subset equivalent to specifying the index-2
+constraints there.
+For an index-2 problem in hessenberg form, the projected
+collocation method of Ascher and Petzold [2] is used.
+</p>
+
+
+<h3>Value</h3>
+
+<p>A matrix of class <code>bvpSolve</code>, with up to as many rows as elements in 
+<code>x</code> and as many columns
+as elements in <code>yini</code> plus the number of &quot;global&quot; values returned
+in the second element of the return from <code>func</code>, plus an additional
+column (the first) for the <code>x</code>-value.
+</p>
+<p>There will be one row for each element in <code>x</code> unless the solver returns
+with an unrecoverable error.
+</p>
+<p>If <code>ynames</code> is given, or <code>yini</code>, <code>yend</code> has a names attribute, 
+or <code>yguess</code> has named rows, the names will be used to label the
+columns of the output value.
+</p>
+<p>The output will also have <code>attributes</code> <code>istate</code> and <code>rstate</code>
+which contain the collocation output required e.g. for continuation of a 
+problem, unless <code>fullOutput</code> is <code>FALSE</code>
+</p>
+
+
+<h3>Note</h3>
+
+<p>colnew.f (Bader and Ascher, 1987), is a modification of the code
+colsys.f (Ascher, Christiansen and Russell, 1981), which incorporates 
+a new basis representation replacing b-splines, and improvements for
+the linear and nonlinear algebraic equation solvers. To toggle on/off
+colsys, set <code>bspline</code> = <code>TRUE</code>/<code>FALSE</code>
+</p>
+<p>colmod is a revised version of the package colnew by
+Bader and Ascher (1987), which in turn is a modification of the package
+colsys by Ascher, Christiansen and Russell (1981). Colmod has been
+adapted to allow an automatic continuation strategy to
+be used (Cash et al., 1995).
+</p>
+<p>The mesh selection algorithm used in colmod differs from that used in colnew
+</p>
+
+
+<h3>Author(s)</h3>
+
+<p>Karline Soetaert &lt;karline.soetaert@nioz.nl&gt;
+</p>
+
+
+<h3>References</h3>
+
+<p>U. Ascher, J. Christiansen and R. D. Russell,  (1981)
+collocation software for boundary-value odes,
+acm trans. math software 7, 209-222.
+</p>
+<p>G. Bader and U. Ascher, (1987)
+a new basis implementation for a mixed order
+boundary value ode solver,
+siam j. scient. stat. comput. 8, 487-483.
+</p>
+<p>U. Ascher, J. Christiansen and R.D. Russell, (1979)
+a collocation solver for mixed order
+systems of boundary value problems,
+math. comp. 33, 659-679.
+</p>
+<p>U. Ascher, J. Christiansen and R.D. Russell, (1979)
+colsys - a collocation code for boundary value problems,
+lecture notes comp.sc. 76, springer verlag,
+B. Childs et. al. (eds.), 164-185.
+</p>
+<p>J. R. Cash, G. Moore and R. W. Wright, (1995)
+an automatic continuation strategy for the solution of
+singularly perturbed linear two-point boundary value problems,
+j. comp. phys. 122, 266-279.
+</p>
+<p>U. Ascher and R. Spiteri, 1994.
+collocation software for boundary value differential-algebraic equations,
+siam j. scient. stat. comput. 15, 938-952.
+</p>
+<p>U. Ascher and L. Petzold, 1991.
+projected implicit runge-kutta methods for differential-
+algebraic equations,
+siam j. num. anal. 28 (1991), 1097-1120.
+</p>
+
+
+<h3>See Also</h3>
+
+<p><code><a href="bvpshoot.html">bvpshoot</a></code> for the shooting method
+</p>
+<p><a href="bvptwp.html">bvptwp</a> for a MIRK formula
+</p>
+<p><code><a href="diagnostics.html">diagnostics.bvpSolve</a></code>, for a description of diagnostic messages
+</p>
+<p><code><a href="diagnostics.html">approx.bvpSolve</a></code>, for approximating solution in new values
+</p>
+<p><code><a href="plot.bvpSolve.html">plot.bvpSolve</a></code>, for a description of plotting the output of the 
+BVP solvers.
+</p>
+
+
+<h3>Examples</h3>
+
+<pre>
+## =============================================================================
+## Example 1: simple standard problem
+## solve the BVP ODE:
+## d2y/dt^2=-3py/(p+t^2)^2
+## y(t= -0.1)=-0.1/sqrt(p+0.01)
+## y(t=  0.1)= 0.1/sqrt(p+0.01)
+## where p = 1e-5
+##
+## analytical solution y(t) = t/sqrt(p + t^2).
+##
+## The problem is rewritten as a system of 2 ODEs:
+## dy=y2
+## dy2=-3p*y/(p+t^2)^2
+## =============================================================================
+
+#--------------------------------
+# Derivative function
+#--------------------------------
+fun &lt;- function(t, y, pars) { 
+  dy1 &lt;- y[2]
+  dy2 &lt;- - 3 * p * y[1] / (p+t*t)^2
+  return(list(c(dy1,
+                dy2))) }
+
+# parameter value
+p    &lt;- 1e-5
+
+# initial and final condition; second conditions unknown
+init &lt;- c(-0.1 / sqrt(p+0.01), NA)
+end  &lt;- c( 0.1 / sqrt(p+0.01), NA)
+
+# Solve bvp
+sol  &lt;- bvpcol(yini = init, yend = end, 
+               x = seq(-0.1, 0.1, by = 0.001), func = fun)
+plot(sol, which = 1)
+
+# add analytical solution
+curve(x/sqrt(p+x*x), add = TRUE, type = "p")
+
+diagnostics(sol)
+
+zoom &lt;- approx(sol, xout = seq(-0.005, 0.005, by  = 0.0001))
+plot(zoom, which = 1, main = "zoom in on [-0.0005,0.0005]")
+
+
+## =============================================================================
+## Example 1b: 
+## Same problem, now solved as a second-order equation 
+## and with different value of "p".
+## =============================================================================
+
+fun2 &lt;- function(t, y, pars)
+{ dy &lt;- - 3 * p * y[1] / (p+t*t)^2
+  list(dy)
+}
+
+p &lt;- 1e-4
+sol2  &lt;- bvpcol(yini = init, yend = end, order = 2, 
+                x = seq(-0.1, 0.1, by = 0.001), func = fun2)
+
+# plot both runs at once:
+plot(sol, sol2, which = 1)
+
+## =============================================================================
+## Example 1c: simple
+## solve d2y/dx2 + 1/x*dy/dx + (1-1/(4x^2)y = sqrt(x)*cos(x),
+## on the interval [1,6] and with boundary conditions:
+## y(1)=1, y(6)=-0.5
+##
+## Write as set of 2 odes
+## dy/dx = y2
+## dy2/dx  = - 1/x*dy/dx - (1-1/(4x^2)y + sqrt(x)*cos(x)
+## =============================================================================
+
+f2 &lt;- function(x, y, parms)
+{
+ dy  &lt;- y[2]
+ dy2 &lt;- -1/x * y[2]- (1-1/(4*x^2))*y[1] + sqrt(x)*cos(x)
+ list(c(dy, dy2))
+}
+
+x    &lt;- seq(1, 6, 0.1)
+sol  &lt;- bvpcol(yini = c(1, NA), yend = c(-0.5, NA), bspline = TRUE,
+               x = x, func = f2)
+plot(sol, which = 1)
+
+# add the analytic solution
+curve(0.0588713*cos(x)/sqrt(x) + 1/4*sqrt(x)*cos(x)+0.740071*sin(x)/sqrt(x)+
+      1/4*x^(3/2)*sin(x), add = TRUE, type = "l")
+
+
+## =============================================================================
+## Example 2. Uses continuation
+## Test problem 24
+## =============================================================================
+
+Prob24&lt;- function(t, y, ks) {     #eps is called ks here
+  A &lt;- 1+t*t
+  AA &lt;- 2*t
+  ga &lt;- 1.4
+  list(c(y[2],(((1+ga)/2 -ks*AA)*y[1]*y[2]-y[2]/y[1]-
+               (AA/A)*(1-(ga-1)*y[1]^2/2))/(ks*A*y[1])))
+}
+
+ini &lt;- c(0.9129, NA)
+end &lt;- c(0.375, NA)
+xguess &lt;- c(0, 1)
+yguess &lt;- matrix(nrow = 2, ncol = 2, 0.9 )
+
+# bvpcol works with eps NOT too small, and good initial condition ...
+sol &lt;- bvpcol(yini = ini, yend = end, x = seq(0, 1, by = 0.01),
+              xguess = xguess, yguess = yguess,
+              parms = 0.1, func = Prob24, verbose = FALSE)
+
+# when continuation is used: does not need a good initial condition
+sol2 &lt;- bvpcol(yini = ini, yend = end, x = seq(0, 1, by = 0.01),
+                  parms = 0.05, func = Prob24,
+                  eps = 0.05)
+                  
+#zoom &lt;- approx(sol2, xout = seq(0.01, 0.02, by  = 0.0001))
+#plot(zoom, which = 1, main = "zoom in on [0.01, 0.02]")
+
+sol3 &lt;- bvpcol(yini = ini, yend = end, x = seq(0, 1, by = 0.01),
+                  parms = 0.01, func = Prob24 , eps = 0.01)
+
+sol4 &lt;- bvpcol(yini = ini, yend = end, x = seq(0, 1, by = 0.01),
+                  parms = 0.001, func = Prob24, eps = 0.001)
+
+# This takes a long time
+## Not run: 
+print(system.time(
+sol5 &lt;- bvpcol(yini = ini, yend = end, x = seq(0, 1, by = 0.01),
+                  parms = 1e-4, func = Prob24, eps = 1e-4)
+))
+
+## End(Not run)
+
+plot(sol, sol2, sol3, sol4, which = 1, main = "test problem 24",
+     lwd = 2)
+
+legend("topright", col = 1:4, lty = 1:4, lwd = 2,
+       legend = c("0.1", "0.05", "0.01", "0.001"), title = "eps")
+
+## =============================================================================
+## Example 3  - solved with specification of boundary, and jacobians
+## d4y/dx4 =R(dy/dx*d2y/dx2 -y*dy3/dx3)
+## y(0)=y'(0)=0
+## y(1)=1, y'(1)=0
+##
+## dy/dx  = y2
+## dy2/dx = y3    (=d2y/dx2)
+## dy3/dx = y4    (=d3y/dx3)
+## dy4/dx = R*(y2*y3 -y*y4)
+## =============================================================================
+
+# derivative function: 4 first-order derivatives
+f1st&lt;- function(x, y, S) {
+  list(c(y[2],
+         y[3],
+         y[4],
+         1/S*(y[2]*y[3] - y[1]*y[4]) ))
+}
+
+# jacobian of derivative function
+df1st &lt;- function(x, y, S) {
+ matrix(nrow = 4, ncol = 4, byrow = TRUE, data = c(
+             0,         1,      0,       0,
+             0,         0,      1,       0,
+             0,         0,      0,       1,
+             -1*y[4]/S, y[3]/S, y[2]/S, -y[1]/S))
+}
+
+# boundary
+g2 &lt;- function(i, y, S)  {
+  if (i == 1) return (y[1])
+  if (i == 2) return (y[2])
+  if (i == 3) return (y[1] - 1)
+  if (i == 4) return (y[2])
+}
+
+# jacobian of boundary
+dg2 &lt;- function(i, y, S)  {
+  if (i == 1) return(c(1, 0, 0, 0))
+  if (i == 2) return(c(0, 1, 0, 0))
+  if (i == 3) return(c(1, 0, 0, 0))
+  if (i == 4) return(c(0, 1, 0, 0))
+}
+
+# we use posbound to specify the position of boundary conditions
+# we can also use leftbc = 2 rather than posbound = c(0,0,1,1)
+S    &lt;- 1/100
+sol  &lt;- bvpcol(x = seq(0, 1, by = 0.01),
+          ynames = c("y", "dy", "d2y", "d3y"),
+          posbound = c(0, 0, 1, 1), func = f1st, parms = S, eps = S,
+          bound = g2, jacfunc = df1st, jacbound = dg2)
+
+plot(sol)
+
+## =============================================================================
+## Example 3b - solved with specification of boundary, and jacobians
+## and as a higher-order derivative
+## d4y/dx4 =R(dy/dx*d2y/dx2 -y*dy3/dx3)
+## y(0)=y'(0)=0
+## y(1)=1, y'(1)=0
+## =============================================================================
+
+# derivative function: one fourth-order derivative
+f4th &lt;- function(x, y, S) {
+  list(1/S * (y[2]*y[3] - y[1]*y[4]))
+}
+
+# jacobian of derivative function
+df4th &lt;- function(x, y, S)  {
+  matrix(nrow = 1, ncol = 4, byrow = TRUE, data = c(
+             -1*y[4]/S, y[3]/S, y[2]/S, -y[1]/S))
+}
+
+# boundary function - same as previous example
+
+# jacobian of boundary - same as previous
+
+# order = 4 specifies the equation to be 4th order
+# solve with bspline false
+S    &lt;- 1/100
+sol  &lt;- bvpcol (x = seq(0, 1, by = 0.01),
+          ynames = c("y", "dy", "d2y", "d3y"),
+          posbound = c(0, 0, 1, 1), func = f4th, order = 4,
+          parms = S, eps = S, bound = g2, jacfunc = df4th,
+          jacbound = dg2 )
+
+plot(sol)
+
+# Use (manual) continuation to find solution of a more difficult example
+# Previous solution collocation from sol passed ("guess = sol")
+
+sol2  &lt;- bvpcol(x = seq(0, 1, by = 0.01),
+          ynames = c("y", "dy", "d2y", "d3y"),
+          posbound = c(0, 0, 1, 1), func = f4th,
+          parms = 1e-6, order = 4, eps = 1e-6,
+          bound = g2, jacfunc = df4th, jacbound = dg2 )
+
+# plot both at same time
+plot(sol, sol2, lwd = 2)
+
+legend("bottomright", leg = c(100, 10000), title = "R = ",
+         col = 1:2, lty = 1:2, lwd = 2)
+
+
+## =============================================================================
+## Example 4  - a multipoint bvp
+## dy1 = (y2 - 1)/2
+## dy2 = (y1*y2 - x)/mu
+## over interval [0,1]
+## y1(1) = 0; y2(0.5) = 1
+## =============================================================================
+
+multip &lt;- function (x, y, p) {
+  list(c((y[2] - 1)/2, 
+         (y[1]*y[2] - x)/mu))
+}
+
+bound &lt;- function (i, y, p) {
+  if (i == 1) y[2] -1    # at x=0.5: y2=1
+  else y[1]              # at x=  1: y1=0
+}
+
+mu  &lt;- 0.1
+sol &lt;- bvpcol(func = multip, bound = bound, 
+              x = seq(0, 1, 0.01), posbound = c(0.5, 1))
+
+plot(sol)
+
+# check boundary value
+sol[sol[,1] == 0.5,]
+
+
+## =============================================================================
+## Example 5 - a bvp DAE
+## =============================================================================
+
+bvpdae &lt;- function(t, x, ks, ...) {
+  p1  &lt;- p2 &lt;- sin(t)
+  dp1 &lt;- dp2 &lt;- cos(t)
+  
+  dx1 &lt;- (ks + x[2] - p2)*x[4] + dp1
+  dx2 &lt;- dp2
+  dx3 &lt;- x[4]
+  res &lt;- (x[1] - p1)*(x[4] - exp(t))
+
+  list(c(dx1, dx2, dx3, res), res = res)
+}
+
+boundfun &lt;- function(i,  x, par, ...) {
+  if (i == 1) return(x[1] - sin(0))
+  if (i == 2) return(x[3] - 1)
+  if (i == 3) return(x[2] - sin(1))
+  if (i == 4) return((x[1] - sin(1))*(x[4] - exp(1)))  # Not used here..
+}
+
+x &lt;- seq(0, 1, by = 0.01)
+mass &lt;- diag(nrow = 4)  ; mass[4, 4] &lt;- 0
+
+# solved using boundfun
+out &lt;- bvpcol (func = bvpdae, bound = boundfun, x = x, 
+               parms = 1e-4, ncomp = 4, leftbc = 2,
+               dae = list(index = 2,  nalg = 1)) 
+
+# solved using yini, yend
+out1 &lt;- bvpcol (func = bvpdae, x = x, parms = 1e-4, 
+                yini = c(sin(0), NA, 1, NA), 
+                yend = c(NA, sin(1), NA, NA),
+                dae = list(index = 2,  nalg = 1)) 
+
+# the analytic solution
+ana &lt;- cbind(x, "1" = sin(x), "2" = sin(x), "3" = 1, "4" = 0, res = 0)
+plot(out, out1, obs = ana)
+
+</pre>
+
+<hr /><div style="text-align: center;">[Package <em>bvpSolve</em> version 1.4 <a href="00Index.html">Index</a>]</div>
+</body></html>

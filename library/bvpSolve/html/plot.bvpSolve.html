@@ -1,0 +1,250 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><title>R: Plot and Print Methods for Output of bvp solvers</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<link rel="stylesheet" type="text/css" href="R.css" />
+</head><body>
+
+<table width="100%" summary="page for plot.bvpSolve {bvpSolve}"><tr><td>plot.bvpSolve {bvpSolve}</td><td style="text-align: right;">R Documentation</td></tr></table>
+
+<h2>
+Plot and Print Methods for Output of bvp solvers
+</h2>
+
+<h3>Description</h3>
+
+<p>Plot the output of boundary value solver routines.
+</p>
+
+
+<h3>Usage</h3>
+
+<pre>
+## S3 method for class 'bvpSolve'
+plot(x, ..., which = NULL, ask = NULL, 
+                        obs = NULL, obspar= list())
+## S3 method for class 'bvpSolve'
+print(x, ...)
+</pre>
+
+
+<h3>Arguments</h3>
+
+<table summary="R argblock">
+<tr valign="top"><td><code>x </code></td>
+<td>
+<p>the output of <code>bvpSolve</code>, as returned by the
+boundary value solvers, and to be plotted.
+</p>
+<p>It is allowed to pass several objects of class
+<code>bvpSolve</code> after <code>x</code> (unnamed) - see second example.
+</p>
+</td></tr>
+<tr valign="top"><td><code>which </code></td>
+<td>
+<p>the name(s) or the index to the variables that should be
+plotted.  Default = all variables, except the first column.
+</p>
+</td></tr>
+<tr valign="top"><td><code>ask </code></td>
+<td>
+<p>logical; if <code>TRUE</code>, the user is <em>ask</em>ed before
+each plot, if <code>NULL</code> the user is only asked if more than one
+page of plots is necessary and the current graphics device is set
+interactive, see <code><a href="../../graphics/html/par.html">par</a>(ask=.)</code> and
+<code><a href="../../grDevices/html/dev.interactive.html">dev.interactive</a></code>.
+</p>
+</td></tr>
+<tr valign="top"><td><code>obs </code></td>
+<td>
+<p>a <code>data.frame</code> or <code>matrix</code> with &quot;observed data&quot; that 
+will be added as <code>points</code> to the plots. <code>obs</code> can also be a 
+<code>list</code> with multiple data.frames and/or matrices containing 
+observed data.
+</p>
+<p>By default the first column of an observed data set should contain 
+the <code>time</code>-variable.  The other columns contain the observed values
+and they should have names that are known in <code>x</code>.
+</p>
+<p>If the first column of <code>obs</code> consists of factors or characters (strings),
+then it is assumed that the data are presented in long (database) format,
+where the first three columns contain (name, time, value).  
+</p>
+<p>If <code>obs</code> is not <code>NULL</code> and <code>which</code> is <code>NULL</code>, 
+then the variables, common to both <code>obs</code> and <code>x</code> will be plotted.
+</p>
+</td></tr>
+<tr valign="top"><td><code>obspar </code></td>
+<td>
+<p>additional graphics arguments passed to <code>points</code>, for 
+plotting the observed data
+</p>
+</td></tr>
+<tr valign="top"><td><code>...</code></td>
+<td>
+<p>additional arguments.
+</p>
+<p>The graphical arguments are passed to <code><a href="../../graphics/html/plot.default.html">plot.default</a></code>.
+</p>
+<p>The dots may also contain other objects of class 
+<code>bvpSolve</code>, as returned by the boundary value solvers, and 
+to be plotted on the same graphs as <code>x</code>  - see second example.
+In this case, <code>x</code> and and these other objects should be compatible, 
+i.e. the names should be the same and they should have same number of rows.
+</p>
+<p>The arguments after ... must be matched exactly.     
+</p>
+</td></tr> </table>
+
+
+<h3>Details</h3>
+
+<p><code>print.bvpSolve</code> prints the matrix without the attributes.
+</p>
+<p><code>plot.bvpSolve</code> plots multiple figures on a page.
+</p>
+<p>The number of panels per page is automatically determined up to 3 x 3
+(<code>par(mfrow = c(3, 3))</code>). This default can be overwritten by
+specifying user-defined settings for <code>mfrow</code> or <code>mfcol</code>.
+Set <code>mfrow</code> equal to <code>NULL</code> to avoid the plotting function to 
+change user-defined <code>mfrow</code> or <code>mfcol</code> settings.
+</p>
+<p>Other graphical parameters can be passed as well. Parameters
+are vectorized, either according to the number of plots 
+(<code>xlab, ylab</code>, <code>main, sub</code>, <code>xlim, ylim</code>, <code>log</code>,
+<code>asp, ann, axes, frame.plot</code>,<code>panel.first,panel.last</code>,
+<code>cex.lab,cex.axis,cex.main</code>) or 
+according to the number of lines within one plot (other parameters 
+e.g. <code>col</code>, <code>lty</code>, <code>lwd</code> etc.) so it is possible to
+assign specific axis labels to individual plots, resp. different plotting 
+style. Plotting parameter <code>ylim</code>, or <code>xlim</code> can also be a list 
+to assign different axis limits to individual plots.
+</p>
+<p>Similarly, the graphical parameters for observed data, as passed by 
+<code>obspar</code> can be vectorized, according to the number of observed 
+data sets.
+</p>
+
+
+<h3>See Also</h3>
+
+<p><code><a href="diagnostics.html">diagnostics.bvpSolve</a></code>, for a description of diagnostic messages.
+</p>
+
+
+<h3>Examples</h3>
+
+<pre>
+## =============================================================================
+## The example MUSN from Ascher et al., 1995.
+## Numerical Solution of Boundary Value Problems for Ordinary Differential
+## Equations, SIAM, Philadelphia, PA, 1995.
+##
+## The problem is
+##      u' =  0.5*u*(w - u)/v
+##      v' = -0.5*(w - u)
+##      w' = (0.9 - 1000*(w - y) - 0.5*w*(w - u))/z
+##      z' =  0.5*(w - u)
+##      y' = -100*(y - w)
+##   on the interval [0 1] and with boundary conditions:
+##      u(0) = v(0) = w(0) = 1,  z(0) = -10,  w(1) = y(1)
+## =============================================================================
+
+musn &lt;- function(t, Y, pars)  {
+  with (as.list(Y),
+  {
+   du &lt;- 0.5 * u * (w-u)/v
+   dv &lt;- -0.5 * (w-u)
+   dw &lt;- (0.9 - 1000 * (w-y) - 0.5 * w * (w-u))/z
+   dz &lt;- 0.5 * (w-u)
+   dy &lt;- -100 * (y-w)
+   return(list(c(du, dv, dw, dz, dy)))
+  })
+}
+
+#--------------------------------
+# Boundaries
+#--------------------------------
+bound &lt;- function(i,y,pars) {
+  with (as.list(y), {
+    if (i ==1) return (u-1)
+    if (i ==2) return (v-1)
+    if (i ==3) return (w-1)
+    if (i ==4) return (z+10)
+    if (i ==5) return (w-y)
+ })
+}
+
+xguess &lt;- seq(0, 1, len = 5)
+yguess &lt;- matrix(ncol = 5, (rep(c(1, 1, 1, -10, 0.91), times = 5)) )
+rownames(yguess) &lt;- c("u", "v", "w", "z", "y")
+
+sol  &lt;- bvpcol (bound = bound, x = seq(0, 1, by = 0.05), 
+          leftbc = 4, func = musn, xguess = xguess, yguess = yguess)
+
+mf &lt;- par("mfrow")
+plot(sol)
+par(mfrow = mf)
+
+## =============================================================================
+## Example 2. Example Problem 31 from Jeff Cash's website
+## =============================================================================
+
+Prob31 &lt;- function(t, Y, pars)  {
+  with (as.list(Y), {
+    dy    &lt;- sin(Tet)
+    dTet  &lt;- M
+    dM    &lt;- -Q/xi
+    T     &lt;- 1/cos (Tet) +xi*Q*tan(Tet)
+    dQ    &lt;- 1/xi*((y-1)*cos(Tet)-M*T)
+    list(c( dy, dTet, dM, dQ))
+  })
+}
+
+ini &lt;- c(y = 0, Tet = NA, M = 0, Q = NA)
+end &lt;- c(y = 0, Tet = NA, M = 0, Q = NA)
+
+# run 1
+xi &lt;-0.1
+twp  &lt;- bvptwp(yini = ini, yend = end, x = seq(0, 1, by = 0.01),
+               func = Prob31, atol = 1e-10)
+
+# run 2
+xi &lt;- 0.05
+twp2 &lt;- bvptwp(yini = ini, yend = end, x = seq(0, 1, by = 0.01),
+               func = Prob31, atol = 1e-10)
+
+# run 3
+xi &lt;- 0.01
+twp3 &lt;- bvptwp(yini = ini, yend = end, x = seq(0, 1, by = 0.01),
+               func = Prob31, atol = 1e-10)
+
+# print all outputs at once
+plot(twp, twp2, twp3, xlab = "x", ylab = names(ini))
+
+
+# change type, colors, ...
+plot(twp, twp2, twp3, type = c("l", "b", "p"), 
+     main = paste ("State Variable", names(ini)), 
+     col = c("red", "blue", "orange"), cex = 2)
+
+## =============================================================================
+## Assume we have two 'data sets':
+## =============================================================================
+# data set in 'wide' format
+obs1 &lt;- cbind(time = c(0, 0.5, 1), Tet = c(0.4, 0.0, -0.4))
+
+# data set in 'long' format
+obs2 &lt;- data.frame(name = "Tet", time = c(0, 0.5, 1), value = c(0.35, 0.0, -0.35))
+
+plot(twp, twp2, obs = obs1, obspar = list(pch = 16, cex = 1.5))
+
+plot(twp, twp2, obs = list(obs1, obs2), 
+    obspar = list(pch = 16, cex = 1.5))
+
+plot(twp, twp2, obs = list(obs1, obs2), which = c("Tet", "Q"),
+    obspar = list(pch = 16:17, cex = 1.5, col = c("red", "black"))
+    )
+
+</pre>
+
+<hr /><div style="text-align: center;">[Package <em>bvpSolve</em> version 1.4 <a href="00Index.html">Index</a>]</div>
+</body></html>

@@ -1,0 +1,622 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><title>R: Solver for two-point boundary value problems of ordinary...</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<link rel="stylesheet" type="text/css" href="R.css" />
+</head><body>
+
+<table width="100%" summary="page for bvpshoot {bvpSolve}"><tr><td>bvpshoot {bvpSolve}</td><td style="text-align: right;">R Documentation</td></tr></table>
+
+<h2>
+Solver for two-point boundary value problems of ordinary differential
+equations, using the single shooting method
+</h2>
+
+<h3>Description</h3>
+
+<p>Solves a boundary value problem of a system of ordinary differential
+equations using the single shooting method. 
+This combines the integration routines from package 
+<code>deSolve</code> with root-finding methods from package <code>rootSolve</code>.
+</p>
+<p>Preferentially <code>bvptwp</code> or <code>bvpcol</code> should be used rather than
+<code>bvpshoot</code>, as they give more precise output.
+</p>
+
+
+<h3>Usage</h3>
+
+<pre>
+bvpshoot(yini = NULL, x, func, yend = NULL, parms = NULL, 
+         order = NULL, guess = NULL,
+         jacfunc = NULL, bound = NULL, jacbound = NULL, 
+         leftbc = NULL, posbound = NULL, ncomp = NULL, 
+         atol = 1e-8, rtol = 1e-8, extra = NULL, 
+         maxiter = 100, positive = FALSE, method = "lsoda",...)
+</pre>
+
+
+<h3>Arguments</h3>
+
+<table summary="R argblock">
+<tr valign="top"><td><code>yini </code></td>
+<td>
+<p>either a <em>vector</em> with the initial (state) variable
+values for the ODE system, or a <em>function</em> that calculates the
+initial condition, or <code>NULL</code>.
+</p>
+<p>If <code>yini</code> is a function, it should be defined as:
+<code>yini &lt;- function(y, parms,...)</code>; where <code>y</code> are the initial values,
+and <code>parms</code> the parameters.
+</p>
+<p>if <code>yini</code> is a vector then use <code>NA</code>
+for an initial value which is not available. 
+</p>
+<p>If <code>yini</code> has a  <code>names</code> attribute, the names will be 
+available within the functions and used to label the output matrix.
+</p>
+<p>if <code>yini = NULL</code> then <code>bound</code> should be specified;
+if not <code>NULL</code> then <code>yend</code> should also be not <code>NULL</code>
+</p>
+</td></tr>
+<tr valign="top"><td><code>x </code></td>
+<td>
+<p> sequence of the independent variable for which output is wanted;
+the first value of <code>x</code> must be the initial value (at which
+<code>yini</code> is defined), the final value the end condition (at which
+<code>yend</code> is defined).
+</p>
+</td></tr>
+<tr valign="top"><td><code>func </code></td>
+<td>
+<p>an <span style="font-family: Courier New, Courier; color: #666666;"><b>R</b></span>-function that computes the values of the derivatives in
+the ODE system (the model definition) at x. <code>func</code> must be defined as:
+<code>func  = function(x, y, parms, ...)</code>.  <code>x</code> is the current point of
+the independent variable in the integration, <code>y</code> is the current
+estimate of the (state) variables in the ODE system.  If the initial
+values <code>yini</code> or <code>yend</code> has a names attribute, the names will 
+be available inside <code>func</code>.  <code>parms</code> is a vector or list of parameters;
+... (optional) are any other arguments passed to the function.
+</p>
+<p>The return value of <code>func</code> should be a list, whose first element is a
+vector containing the derivatives of <code>y</code> with respect to
+<code>x</code>, and whose next elements are global values that are required at
+each point in <code>x</code>.
+</p>
+<p>Note that it is not possible to use <code>bvpshoot</code> with functions
+defined in compiled code. Use <a href="bvptwp.html">bvptwp</a> instead.
+</p>
+</td></tr>
+<tr valign="top"><td><code>yend </code></td>
+<td>
+<p>either a vector with the final (state) variable values for the
+ODE system, a <em>function</em> that calculates the final condition 
+or <code>NULL</code>; 
+</p>
+<p>if <code>yend</code> is a vector use <code>NA</code>
+for a final value which is not available.
+</p>
+<p>If <code>yend</code> is a function, it should be defined as:
+<code>yend &lt;- function (y, yini, parms, ...)</code>; where <code>y</code> are the 
+final values, <code>yini</code> the initial values and <code>parms</code> the 
+parameters.
+</p>
+<p>If <code>yend</code> has a  <code>names</code> attribute, and <code>yini</code> does not,
+the names will be available within the functions and 
+used to label the output matrix.
+</p>
+<p>if <code>yend = NULL</code> then <code>bound</code> should be specified; 
+if not <code>NULL</code> then <code>yini</code> should also be not <code>NULL</code>. 
+</p>
+</td></tr>
+<tr valign="top"><td><code>parms </code></td>
+<td>
+<p>vector or a list with parameters passed to <code>func</code>,
+<code>jacfunc</code>, <code>bound</code> and <code>jacbound</code> (if present).
+</p>
+</td></tr>
+<tr valign="top"><td><code>order </code></td>
+<td>
+<p>the order of each derivative in <code>func</code>. The default is that
+all derivatives are 1-st order, in which case <code>order</code> can be set = 
+<code>NULL</code>.
+</p>
+<p>If <code>order</code> is not <code>NULL</code>, the number of equations in <code>func</code> 
+must equal the length of <code>order</code>; the summed values of <code>order</code>
+must equal the number of variables (ncomp). 
+The jacobian as specified in <code>jacfunc</code>
+must have number of rows = number of equations and number of columns = number 
+of variables.                            
+<code>bound</code> and <code>jacbound</code> remain defined in the number of variables.
+See examples. 
+</p>
+</td></tr>   
+<tr valign="top"><td><code>guess </code></td>
+<td>
+<p>guess for the value(s) of the unknown <em>initial</em> conditions;
+</p>
+<p>if initial and final conditions are specified by <code>yini</code> and 
+<code>yend</code>, then <code>guess</code> should contain one 
+value for each <code>NA</code> in <code>yini</code>.
+The length of <code>guess</code> should thus equal the number of <em>unknown initial 
+conditions</em> (=<code>NA</code>s in <code>yini</code>). If <code>guess</code> is not provided, 
+a value = 0 is assumed for each <code>NA</code> in <code>yini</code> and a warning 
+printed.
+</p>
+<p>If initial and final conditions are specified by the boundary function 
+<code>bound</code>, then <code>guess</code> should contain the initial guess for 
+<em>all initial conditions</em>, i.e. its length should equal the number of state
+variables in the ODE system;
+if in this case <code>guess</code> has a names attribute, the names will be 
+available within the functions and used to label the output matrix.
+If <code>guess</code> is not provided, then <code>ncomp</code> should specify the 
+total number of variables, a value = 0 will be assumed for the initial
+conditions and a warning printed.
+</p>
+</td></tr>
+<tr valign="top"><td><code>jacfunc </code></td>
+<td>
+<p>jacobian (optional) - an <span style="font-family: Courier New, Courier; color: #666666;"><b>R</b></span>-function that evaluates the
+jacobian of <code>func</code> at point <code>x</code>.
+</p>
+<p><code>jacfunc</code> must be defined as <code>jacfunc = function(x, y, parms,...)</code>.
+It should return the partial derivatives of <code>func</code> with respect to
+<code>y</code>, i.e. df(i,j) = dfi/dyj.  
+</p>
+<p>If <code>jacfunc</code> is <code>NULL</code>, then a numerical approximation using
+differences is used. This is the default.
+</p>
+<p><code>jacfunc</code> is passed to the initial value problem solver.
+</p>
+</td></tr>
+<tr valign="top"><td><code>bound </code></td>
+<td>
+<p>boundary function (optional) - only if <code>yini</code> and
+<code>yend</code> are not available. An <span style="font-family: Courier New, Courier; color: #666666;"><b>R</b></span> function that evaluates
+the i-th boundary element at point <code>x</code>.
+</p>
+<p><code>bound</code> should be defined as:
+<code>bound = function(i, y, parms, ...)</code>. It should return the i-th
+boundary condition.  
+</p>
+<p>if not <code>NULL</code>, <code>bound</code> defines the root to be solved by the 
+root solving algorithm.
+</p>
+</td></tr>
+<tr valign="top"><td><code>jacbound </code></td>
+<td>
+<p>jacobian of the boundary function (optional) - only if
+<code>bound</code> is defined. An <span style="font-family: Courier New, Courier; color: #666666;"><b>R</b></span> function that evaluates
+the gradient of the i-th boundary element with respect to the state
+variables, at point <code>x</code>.
+</p>
+<p><code>jacbound</code> should be defined as:
+<code>jacbound = function(i, y, parms, ...)</code>.
+It should return the gradient of the i-th boundary condition.
+See last example.
+</p>
+<p><code>jacbound</code> is passed to the root solver.
+</p>
+</td></tr>
+<tr valign="top"><td><code>leftbc </code></td>
+<td>
+<p>only if <code>yini</code> and <code>yend</code> are not available: the
+number of left boundary conditions.
+</p>
+</td></tr>
+<tr valign="top"><td><code>posbound </code></td>
+<td>
+<p>only used if <code>bound</code> is given: a vector with the position 
+(in the mesh) of the boundary conditions - only points that are in <code>x</code>
+are allowed. Note that, if the boundary conditions are at the ends of the 
+integration interval, it is simpler to use <code>leftbc</code>. 
+</p>
+</td></tr>
+<tr valign="top"><td><code>ncomp </code></td>
+<td>
+<p>only used if the boundaries are specified via the boundary 
+function <code>bound</code> and <code>guess</code> is not specified. 
+The number of components.  
+</p>
+</td></tr>
+<tr valign="top"><td><code>atol </code></td>
+<td>
+<p>absolute error tolerance, either a scalar or a vector, one
+value for each unknown element - passed to function
+<a href="../../rootSolve/html/multiroot.html">multiroot</a> - see help of this function.
+</p>
+</td></tr>
+<tr valign="top"><td><code>rtol </code></td>
+<td>
+<p>relative error tolerance, either a scalar or a vector, one
+value for each unknown element - passed to function
+<a href="../../rootSolve/html/multiroot.html">multiroot</a> - see help of this function.
+</p>
+</td></tr>
+<tr valign="top"><td><code>extra </code></td>
+<td>
+<p>if too many boundary conditions are given, then it is assumed
+that an extra parameter has to be estimated.
+</p>
+<p><code>extra</code> should contain the initial guess of this extra parameter.
+</p>
+</td></tr>
+<tr valign="top"><td><code>maxiter </code></td>
+<td>
+<p>the maximal number of iterations allowed in the root solver.
+</p>
+</td></tr>
+<tr valign="top"><td><code>positive </code></td>
+<td>
+<p>set to <code>TRUE</code> if dependent variables (y) have to be
+positive numbers.
+</p>
+</td></tr>
+<tr valign="top"><td><code>method </code></td>
+<td>
+<p>the integration method used, one of (&quot;lsoda&quot;, &quot;lsode&quot;,
+&quot;lsodes&quot;, &quot;vode&quot;, &quot;euler&quot;, &quot;rk4&quot;, &quot;ode23&quot; or &quot;ode45&quot;).
+</p>
+</td></tr>
+<tr valign="top"><td><code>... </code></td>
+<td>
+<p>additional arguments passed to the integrator and (possibly)
+the model functions.
+</p>
+</td></tr>
+</table>
+
+
+<h3>Details</h3>
+
+<p>This is a simple implementation of the shooting method to solve boundary
+value problems of ordinary differential equations.
+</p>
+<p>A boundary value problem does not have all initial values of
+the state variable specified. Rather some conditions are specified at
+the end of the integration interval.
+</p>
+<p>The shooting method, is a root-solving method.
+There are two strategies:
+</p>
+
+<dl>
+<dt>yini and yend specified </dt><dd>
+<p>If initial and end conditions are specified with <code>yini</code> and <code>yend</code>
+then the (unspecified) initial conditions are the unknown values to be solved 
+for; the function value whose root has to be found are the deviations from 
+the specified conditions at the end of the integration interval. 
+</p>
+<p>Thus, starting with an initial guess of the initial conditions (as
+provided in <code>guess</code>), the ODE model is solved as an initial value
+problem, and after termination, the discrepancy of the modeled final
+conditions with the known final condition is assessed (the cost function).
+The root of this cost function is to be found.
+</p>
+</dd>
+<dt>bound specified </dt><dd><p>If initial and end conditions are specified with 
+<code>bound</code>, then the 
+unknowns are all initial conditions; the function whose root is to be 
+found is given by <code>bound</code>.
+</p>
+</dd>
+</dl>
+
+<p>Starting from a guess of the initial values, one of the integrators from 
+package <code>deSolve</code> (as specified with <code>method</code>) is used to solve the 
+resulting initial value problem.
+</p>
+<p>Function <code>multiroot</code> from package <code>rootSolve</code> is used to
+retrieve the root.
+</p>
+<p>For this method to work, the model should be even determined, i.e. the number
+of equations should equal the number of unknowns.
+</p>
+<p><code>bvpshoot</code> distinguishes two cases:
+</p>
+<p>1. the total number of specified boundary conditions (on both the start and
+end of the integration interval) equals the number of boundary value
+problem equations (or the number of dependent variables <code>y</code>).
+</p>
+<p>2. The number of boundary conditions specified <em>exceeds</em>
+the number of equations. In this case, <code>extra</code> parameters have to be solved
+for to make the model even determined.
+</p>
+<p>See example nr 4.
+</p>
+
+
+<h3>Value</h3>
+
+<p>A matrix with up to as many rows as elements in <code>x</code> and as many columns
+as the number of state variables in the ODE system plus the number of 
+&quot;global&quot; values returned in the next elements of the return from <code>func</code>, 
+plus an additional column (the first) for the x-value.
+</p>
+<p>There will be one row for each element in <code>x</code> unless the solver
+returns with an unrecoverable error.
+</p>
+<p>If <code>yini</code> has a names attribute, it will be used to label the columns
+of the output value. If <code>yini</code> is not named, the solver will try to find
+the names in <code>yend</code>.  If the boundaries are specified by <code>bound</code> 
+then the names from <code>guess</code> will be used.
+</p>
+<p>The output will have the attribute <code>roots</code>, which returns the value(s)
+of the root(s) solved for (<code>root</code>), the function value (<code>f.root</code>),
+and the number of iterations (<code>iter</code>) required to find the root.
+</p>
+
+
+<h3>Note</h3>
+
+<p>When <code>order</code> is not <code>NULL</code>, then it should contain the order of all
+<em>equations</em> in <code>func</code>. If the order of some equations &gt; 1, then 
+there will be less equations than variables. The number of equations should
+be equal to the length of <code>order</code>, while the number of variables will be
+the sum of order.
+</p>
+<p>For instance, if <code>order = c(1,2,3,4)</code>, then the first equation will be
+of order 1, the second one of order 2, ...and the last of order 4. 
+</p>
+<p>There will be 1+2+3+4 = 10 variables. For instance, if the derivative 
+function defines (A', B&rdquo;, C&rdquo;', D&rdquo;&rdquo;) respectively, then the variable vector 
+will contain values for A, B, B', C, C', C&rdquo;, D, D', D&rdquo;, D&rdquo;'; in that 
+order. This is also the order in which the initial and end conditions of 
+all variables must be specified.
+</p>
+<p>Do not specify the jacobian if the maximal order&gt;1.
+</p>
+
+
+<h3>Author(s)</h3>
+
+<p>Karline Soetaert &lt;karline.soetaert@nioz.nl&gt;
+</p>
+
+
+<h3>See Also</h3>
+
+<p><code><a href="bvptwp.html">bvptwp</a></code> for the MIRK method
+</p>
+<p><code><a href="../../deSolve/html/lsoda.html">lsoda</a></code>, <code><a href="../../deSolve/html/lsode.html">lsode</a></code>,
+<code><a href="../../deSolve/html/lsodes.html">lsodes</a></code>, <code><a href="../../deSolve/html/vode.html">vode</a></code>,
+</p>
+<p><code><a href="../../deSolve/html/rk.html">rk</a></code>, <code><a href="../../deSolve/html/rkMethod.html">rkMethod</a></code>
+for details about the integration method
+</p>
+<p><code><a href="../../rootSolve/html/multiroot.html">multiroot</a></code>, the root-solving method used
+</p>
+<p><code><a href="diagnostics.html">diagnostics.bvpSolve</a></code>, for a description of diagnostic messages
+</p>
+<p><code><a href="plot.bvpSolve.html">plot.bvpSolve</a></code>, for a description of plotting the output of the 
+BVP solvers.
+</p>
+
+
+<h3>Examples</h3>
+
+<pre>
+## =============================================================================
+## Example 1: simple standard problem
+## solve the BVP ODE:
+## d2y/dt^2=-3py/(p+t^2)^2
+## y(t= -0.1)=-0.1/sqrt(p+0.01)
+## y(t=  0.1)= 0.1/sqrt(p+0.01)
+## where p = 1e-5
+##
+## analytical solution y(t) = t/sqrt(p + t^2).
+##
+## The problem is rewritten as a system of 2 ODEs:
+## dy=y2
+## dy2=-3p*y/(p+t^2)^2
+## =============================================================================
+
+#--------------------------------
+# Derivative function
+#--------------------------------
+fun &lt;- function(t, y, pars)
+{ dy1 &lt;- y[2]
+  dy2 &lt;- - 3*p*y[1] / (p+t*t)^2
+  return(list(c(dy1,
+               dy2))) }
+
+
+# parameter value
+p    &lt;- 1e-5
+
+# initial and final condition; second conditions unknown
+init &lt;- c(y = -0.1 / sqrt(p+0.01), dy = NA)
+end  &lt;- c(     0.1 / sqrt(p+0.01), NA)
+
+# Solve bvp
+sol  &lt;- bvpshoot(yini = init, x = seq(-0.1, 0.1, by = 0.001),
+          func = fun, yend = end, guess = 1)
+          
+plot(sol, which = "y", type = "l")
+
+# add analytical solution
+curve(x/sqrt(p+x*x), add = TRUE, type = "p")
+
+## =============================================================================
+## Example 1b: simple
+## solve d2y/dx2 + 1/x*dy/dx + (1-1/(4x^2)y = sqrt(x)*cos(x),
+## on the interval [1,6] and with boundary conditions:
+## y(1)=1, y(6)=-0.5
+##
+## Write as set of 2 odes
+## dy/dx = y2
+## dy2/dx  = - 1/x*dy/dx - (1-1/(4x^2)y + sqrt(x)*cos(x)
+## =============================================================================
+
+f2 &lt;- function(x, y, parms)
+{
+ dy  &lt;- y[2]
+ dy2 &lt;- -1/x*y[2] - (1-1/(4*x^2))*y[1] + sqrt(x)*cos(x)
+ list(c(dy, dy2))
+}
+
+x    &lt;- seq(1, 6, 0.1)
+sol  &lt;- bvpshoot(yini = c(y = 1, dy = NA), yend = c(-0.5, NA), 
+          x = x, func = f2, guess = 1)
+
+# plot both state variables
+plot(sol, type = "l", lwd = 2)
+
+# plot only y and add the analytic solution
+plot(sol, which = "y")
+
+curve(0.0588713*cos(x)/sqrt(x)+1/4*sqrt(x)*cos(x)+0.740071*sin(x)/sqrt(x)+
+      1/4*x^(3/2)*sin(x), add = TRUE, type = "l")
+
+
+## =============================================================================
+## Example 2 - initial condition is a function of the unknown x
+## tubular reactor with axial dispersion
+## y''=Pe(y'+Ry^n) Pe=1,R=2,n=2
+## on the interval [0,1] and with initial conditions:
+## y'0=Pe(y(0)-1), y'(1)=0
+##
+## dy=y2
+## dy2=Pe(dy-Ry^n)
+## =============================================================================
+
+Reactor&lt;-function(x, y, parms)
+{
+  list(c(y[2],
+         Pe * (y[2]+R*(y[1]^n))))
+}
+
+Pe &lt;- 1
+R  &lt;- 2
+n  &lt;- 2
+x  &lt;- seq(0, 1, by = 0.01)
+
+# 1. yini is a function here
+yini &lt;- function (x, parms) c(x, Pe*(x-1))
+
+system.time(
+  sol &lt;- bvpshoot(func = Reactor, yend = c(y = NA, dy = 0), 
+          yini = yini, x = x, extra = 1)
+)
+plot(sol, which = "y", main = "Reactor", type = "l", lwd = 2)
+attributes(sol)$roots
+
+# 2. using boundary function rather than yini...
+bound &lt;- function(i, y, p) {
+  if (i == 1) return(y[2] - Pe*(y[1]-1))
+  if (i == 2) return(y[2])
+}
+
+# need to give number of left boundary conditions + guess of all initial 
+# conditions (+ names)
+system.time(
+Sol2&lt;- bvpshoot(func = Reactor, x = x, leftbc = 1,
+            bound = bound, guess = c(y = 1, dy = 1) )
+)
+attributes(Sol2)$roots
+
+
+# 3. boundary function with jacobian of boundary function
+jacbound &lt;- function(i, y, p) {
+  if (i == 1) return(c(-Pe*y[1], 1))
+  if (i == 2) return(c(0, 1))
+}
+system.time(
+Sol3&lt;-bvpshoot(func = Reactor, x = x, leftbc = 1, bound = bound, 
+           jacbound = jacbound, guess = c(y = 1, dy = 1) )
+)
+attributes(Sol3)$roots
+
+## =============================================================================
+## Example 2b - same as 2 but written as higher-order equation
+## y''=Pe(y'+Ry^n) Pe=1,R=2,n=2
+## on the interval [0,1] and with initial conditions:
+## y'0=Pe(y(0)-1), y'(1)=0
+## =============================================================================
+
+Reactor2&lt;-function(x, y, parms) 
+  list (Pe * (y[2]+R*(y[1]^n)))
+
+Pe &lt;- 1
+R  &lt;- 2
+n  &lt;- 2
+x  &lt;- seq(0, 1, by = 0.01)
+
+# 1. yini is a function here
+yini &lt;- function (x, parms) c(x, Pe*(x-1))
+
+# need to specify that order = 2
+system.time(
+  sol2 &lt;- bvpshoot(func = Reactor2, yend = c(y = NA, dy = 0), order=2,
+          yini = yini, x = x, extra = 1)
+)
+max(abs(sol2-sol))
+
+## =============================================================================
+## Example 3 - final condition is a residual function
+## The example MUSN from Ascher et al., 1995.
+## Numerical Solution of Boundary Value Problems for Ordinary Differential
+## Equations, SIAM, Philadelphia, PA, 1995.
+##
+## The problem is
+##      u' =  0.5*u*(w - u)/v
+##      v' = -0.5*(w - u)
+##      w' = (0.9 - 1000*(w - y) - 0.5*w*(w - u))/z
+##      z' =  0.5*(w - u)
+##      y' = -100*(y - w)
+##   on the interval [0 1] and with boundary conditions:
+##      u(0) = v(0) = w(0) = 1,  z(0) = -10,  w(1) = y(1)
+## =============================================================================
+
+musn &lt;- function(t, Y, pars)
+{
+  with (as.list(Y),
+  {
+   du &lt;- 0.5 * u * (w-u)/v
+   dv &lt;- -0.5 * (w-u)
+   dw &lt;- (0.9 - 1000 * (w-y) - 0.5 * w * (w-u))/z
+   dz &lt;- 0.5 * (w-u)
+   dy &lt;- -100 * (y-w)
+   return(list(c(du, dv, dw, dy, dz)))
+  })
+}
+
+#--------------------------------
+# Residuals of end conditions
+#--------------------------------
+res  &lt;- function (Y, yini, pars)  with (as.list(Y), w-y)
+
+#--------------------------------
+# Initial values; y= NA= not available
+#--------------------------------
+
+init &lt;- c(u = 1, v = 1, w = 1, y = NA, z = -10)
+sol  &lt;-bvpshoot(y = init, x = seq(0, 1, by = 0.05), func = musn,
+           yend = res, guess = 1, atol = 1e-10, rtol = 0)
+pairs(sol, main = "MUSN")
+
+## =============================================================================
+## Example 4 - solve also for unknown parameter
+## Find the 4th eigenvalue of Mathieu's equation:
+## y''+(lam-10cos2t)y=0   on the interval [0,pi]
+## y(0)=1, y'(0)=0  and y'(pi)=0
+## The 2nd order problem is rewritten as 2 first-order problems:
+## dy=y2
+## dy2= -(lam-10cos(2t))*y
+## =============================================================================
+
+mathieu&lt;- function(t, y, lam)
+{
+ list(c(y[2], -(lam - 10 * cos(2*t)) * y[1]))
+}
+
+yini &lt;- c(1, 0)   # initial condition(y1=1,dy=y2=0)
+yend &lt;- c(NA, 0)  # final condition at pi (y1=NA, dy=0)
+
+# there is one extra parameter to be fitted: "lam"; its initial guess = 15
+Sol  &lt;- bvpshoot(yini = yini, yend = yend, x = seq(0, pi, by = 0.01),
+          func = mathieu, guess = NULL, extra = 15)
+plot(Sol)
+attr(Sol, "roots")  # root gives the value of "lam" (17.1068)
+</pre>
+
+<hr /><div style="text-align: center;">[Package <em>bvpSolve</em> version 1.4 <a href="00Index.html">Index</a>]</div>
+</body></html>

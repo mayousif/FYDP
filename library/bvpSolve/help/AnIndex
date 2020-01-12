@@ -1,0 +1,10 @@
+bvpSolve-package	bvpSolve
+approx	diagnostics
+approx.bvpSolve	diagnostics
+bvpcol	bvpcol
+bvpshoot	bvpshoot
+bvpSolve	bvpSolve
+bvptwp	bvptwp
+diagnostics.bvpSolve	diagnostics
+plot.bvpSolve	plot.bvpSolve
+print.bvpSolve	plot.bvpSolve

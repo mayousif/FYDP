@@ -1,0 +1,153 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><title>R: Prints Diagnostic Characteristics of BVP Solvers</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<link rel="stylesheet" type="text/css" href="R.css" />
+</head><body>
+
+<table width="100%" summary="page for diagnostics.bvpSolve {bvpSolve}"><tr><td>diagnostics.bvpSolve {bvpSolve}</td><td style="text-align: right;">R Documentation</td></tr></table>
+
+<h2>Prints Diagnostic Characteristics of BVP Solvers</h2>
+
+<h3>Description</h3>
+
+<p>Prints several diagnostics of the simulation to the screen, e.g.
+conditioning parameters
+</p>
+
+
+<h3>Usage</h3>
+
+<pre>
+## S3 method for class 'bvpSolve'
+diagnostics(obj, ...)
+## S3 method for class 'bvpSolve'
+approx(x, xout = NULL, ...)
+</pre>
+
+
+<h3>Arguments</h3>
+
+<table summary="R argblock">
+<tr valign="top"><td><code>obj </code></td>
+<td>
+<p>the output as produced by <code>bvptwp</code>, <code>bvpcol</code> 
+or <code>bvpshoot</code>.    
+</p>
+</td></tr>
+<tr valign="top"><td><code>x </code></td>
+<td>
+<p>the output as produced by <code>bvpcol</code>    
+</p>
+</td></tr>
+<tr valign="top"><td><code>xout </code></td>
+<td>
+<p>points <code>x</code> for which new variable values should 
+be generated. 
+</p>
+</td></tr>
+<tr valign="top"><td><code>...</code></td>
+<td>
+<p>optional arguments to the generic function.
+</p>
+</td></tr>
+</table>
+
+
+<h3>Details</h3>
+
+<p>When the integration output is saved as a data.frame, then the required
+attributes are lost and method <code>diagnostics</code> will not work anymore.
+</p>
+
+
+<h3>Value</h3>
+
+<p>S3 method <code>diagnostics</code> prints diagnostic features of the simulation. 
+</p>
+<p>What exactly is printed will depend on the solution method.
+</p>
+<p>The diagnostics of all solvers include the 
+number of function evaluations, the number of jacobian evaluations, and
+the number of steps.  
+The diagnostics of both <code>bvptwp</code> and <code>bvpcol</code> also include the 
+the number of boundary evaluations and the number of boundary jacobian 
+evaluations.
+In case the problem was solved with <code>bvpshoot</code>, the diagnostics
+of the initial value problem solver will also be written to screen.
+</p>
+<p>Note that the number of function evaluations are *without* the extra 
+calls performed to generate the ordinary output variables (if present). 
+</p>
+<p>In case the method used was
+<code>bvptwp</code>, will also return the <em>conditioning parameters</em>. They are:
+kappa, kappa1, kappa2, sigma and gamma1.
+</p>
+<p>See <a href="http://www.scpe.org/index.php/scpe/article/view/626">http://www.scpe.org/index.php/scpe/article/view/626</a>
+</p>
+<p>the kappa's are based on the Inf-norm, gamma1 is based on the 1-norm,
+If kappa, kappa1 and gamma1 are  of moderate size, the problem is well
+conditioned. If large, the problem is ill-conditioned. If kappa1
+is large and gamma1 is small, the problem is ill-conditioned in the
+maximum and well conditioned in the 1-norm. This is typical for
+problems that involve different time scales (&quot;stiff&quot; problems). If
+kappa1 is small and kappa, kappa2 are large the problem  has not the
+correct dichotomy.
+</p>
+<p>S3 method <code>approx</code> calculates an approximate solution vector at points
+inbetween the original <code>x</code>-values. If beyond the integration interval,
+it will not extrapolate, but just return the values at the edges.
+This works only when the solution was generated with <code>bvpcol</code>, and 
+usses information in the arrays rwork and iwork, stored as attributes.
+The returned matrix will be of class &quot;bvpSolve&quot; 
+</p>
+
+
+<h3>See Also</h3>
+
+<p><a href="../../deSolve/html/diagnostics.deSolve.html">diagnostics.deSolve</a> for a description of diagnostic messages of the 
+initial value problem solver as used by <code>bvpshoot</code>
+</p>
+<p><code><a href="plot.bvpSolve.html">plot.bvpSolve</a></code>, for a description of plotting the output of the 
+BVP solvers.
+</p>
+
+
+<h3>Examples</h3>
+
+<pre>
+## =============================================================================
+## Diagnostic messages
+## =============================================================================
+f2 &lt;- function(x, y, parms) {
+ dy  &lt;- y[2]
+ dy2 &lt;- -1/x*y[2] - (1-1/(4*x^2))*y[1] + sqrt(x)*cos(x)
+ list(c(dy, dy2))
+}
+
+x    &lt;- seq(1, 6, 0.1)
+yini &lt;- c(y = 1, dy = NA)
+yend &lt;- c(-0.5, NA)
+
+sol   &lt;- bvptwp(yini = yini, yend = yend, x = x, func = f2)
+sol2  &lt;- bvpcol(yini = yini, yend = yend, x = x, func = f2)
+sol3  &lt;- bvpshoot(yini = yini, yend = yend, x = x, func = f2, guess = 0)
+
+plot(sol, which = "y")
+diagnostics(sol)
+diagnostics(sol2)
+diagnostics(sol3)
+
+## =============================================================================
+## approx
+## =============================================================================
+
+soldetail &lt;- approx(sol2, xout = seq(2,4,0.01))
+plot(soldetail)
+
+# beyond the interval
+approx(sol2, xout = c(0,1,2))
+approx(sol2, xout = c(6,100))
+
+</pre>
+
+<hr /><div style="text-align: center;">[Package <em>bvpSolve</em> version 1.4 <a href="00Index.html">Index</a>]</div>
+</body></html>

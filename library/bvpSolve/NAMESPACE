@@ -1,0 +1,18 @@
+useDynLib(bvpSolve, .registration = TRUE)
+export(bvpshoot, bvptwp, bvpcol, diagnostics.bvpSolve, approx)
+importFrom(rootSolve, multiroot)
+importFrom(deSolve, diagnostics.deSolve)
+importFrom(deSolve, diagnostics)
+importFrom(deSolve, ode)
+importFrom(deSolve, DLLfunc)
+
+import("graphics", "grDevices", "stats")
+
+S3method("print", "bvpSolve")
+S3method("plot", "bvpSolve")
+S3method("diagnostics", "bvpSolve")
+S3method("approx","default")
+S3method("approx","bvpSolve")
+
+
+
