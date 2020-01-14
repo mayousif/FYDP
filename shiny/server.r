@@ -19,53 +19,189 @@ server = function(input,output,session){
     # Number of tubes per row vector
     Ntubes_row <<- as.numeric(unlist(strsplit(input$ntubesrow,split = ",")))
     
-    if (input$baffles == 0 && input$ntubes == 1){
+    # Liquid water properties
+    dens_lw = function(x) {
+      Tau = 1 - x/647.096
+      y = 17.863 + 58.606*Tau^0.35 - 95.396*Tau^(2/3) + 213.89*Tau - 141.26*Tau^(4/3) # mol/dm^3
+      y = y*18.015 # kg/m3
+      return(y)
+    }
+    
+    cp_lw = function(x) {
+      y = 276370 - 2090.1*x + 8.125*x^2 - 0.014116*x^3 + 9.3701*10^(-6)*x^4 # J/(kmol K)
+      y = y/18.015 # J/(kg K)
+      return(y)
+    }
+    
+    mu_lw = function(x) {
+      y = exp(-52.843 + 3703.6/x + 5.866*log(x) -5.879*10^(-29)*T^10) # Pa s
+      return(y)
+    }
+    
+    k_lw = function(x) {
+      y = -0.432 + 0.0057255*x - 0.000008078*x^2 + 1.861*10^(-9)*x^3 # W/(m K)
+      return(y)
+    }
+    
+    # Double-pipe, no baffles --------------------------------------------------------------------------------------------  
+    if (input$baffles == 0 && input$ntubes == 1) {withProgress(value = 0.5, message = "Calculation in progress...",{
       
-      parms = c(Ft = input$Ft, Fs = input$Fs, Cpt = input$Cpt, Cps = input$Cps, ht = input$ht, 
-                hs = input$hs, SA_it = SA_it, SA_ot = SA_ot, dz = dz, L = input$L)
+      # Cross sectional area of the shell (m2)
+      CSA_s = pi/4*(input$sid^2-(input$tid+2*input$tt)^2)
       
-      doublePipeNoBaffles = function(z,Temp,parms){
-        
-        Tw = (parms[["hs"]]*Temp[1]*parms[["SA_ot"]] + parms[["ht"]]*Temp[2]*parms[["SA_it"]])/(parms[["ht"]]*parms[["SA_it"]] + parms[["hs"]]*parms[["SA_ot"]])
-        dTs_dz= parms[["hs"]]*(Tw-Temp[1])*parms[["SA_ot"]]/(parms[["Fs"]]*parms[["Cps"]]*parms[["L"]])
-        dTt_dz = -parms[["ht"]]*(Tw-Temp[2])*parms[["SA_it"]]/(parms[["Ft"]]*parms[["Cpt"]]*parms[["L"]])
+      # Cross sectional area of the tube (m2)
+      CSA_t = pi/4*(input$tid^2)
+      
+      # Hydraulic diameter shell/pipe
+      dhs = input$sid - (input$tid + input$tt*2)
+      dht = input$tid
+      
+      # Inital temperature estimate vector
+      Temp <<- c(rep(input$Tsi,times = input$modelsteps),
+                 rep(input$Tti,times = input$modelsteps),
+                 rep(mean(c(input$Tti,input$Tsi)),times = input$modelsteps))
+      
+      err = 1
+      while (err > 0.001) { 
+        # Create matrix containing all calclated temp values
+        T_matrix <<- matrix(data = 0, ncol = input$modelsteps*3,nrow = input$modelsteps*3)
   
-        return(list(c(dTs_dz,dTt_dz)))
+        # Properties
+        Dens <<- dens_lw(Temp)
+        Cp <<- cp_lw(Temp)
+        Mu <<- mu_lw(Temp)
+        K <<- k_lw(Temp)
+        
+        # Reynolds #
+        vs <<- input$Fs/(Dens[1:input$modelsteps]*CSA_s)
+        vt <<- input$Ft/(Dens[(input$modelsteps+1):(2*input$modelsteps)]*CSA_t)
+        Re_s <<- Dens[1:input$modelsteps]*dhs*vs/Mu[1:input$modelsteps]
+        Re_t <<- Dens[(input$modelsteps+1):(2*input$modelsteps)]*dht*vt/Mu[(input$modelsteps+1):(2*input$modelsteps)]
+        
+        # Prandtl #
+        Pr_s <<- Mu[1:input$modelsteps]*Cp[1:input$modelsteps]/K[1:input$modelsteps]
+        Pr_t <<- Mu[(input$modelsteps+1):(2*input$modelsteps)]*Cp[(input$modelsteps+1):(2*input$modelsteps)]/K[(input$modelsteps+1):(2*input$modelsteps)]
+        
+        # Graetz #
+        Gz_s <<- dhs/input$L*Re_s*Pr_s
+        Gz_t <<- dht/input$L*Re_t*Pr_t
+        
+        # Nusselt #
+        if (mean(Re_s) > 2100) {
+          Nu_s <<- 0.027*Re_s^0.8*Pr_s^(1/3)*(Mu[1:input$modelsteps]/Mu[(2*input$modelsteps+1):(3*input$modelsteps)])^0.14
+        } else {
+          Nu_s <<- 1.86*Gz_s^(1/3)*(Mu[1:input$modelsteps]/Mu[(2*input$modelsteps+1):(3*input$modelsteps)])^0.14
+        }
+        
+        if (mean(Re_t) > 2100) {
+          Nu_t <<- 0.027*Re_t^0.8*Pr_t^(1/3)*(Mu[(input$modelsteps+1):(2*input$modelsteps)]/Mu[(2*input$modelsteps+1):(3*input$modelsteps)])^0.14
+        } else {
+          Nu_t <<- 1.86*Gz_t^(1/3)*(Mu[(input$modelsteps+1):(2*input$modelsteps)]/Mu[(2*input$modelsteps+1):(3*input$modelsteps)])^0.14
+        }
+        
+        # Heat transfer coeffcient
+        h_s <<- Nu_s*K[1:input$modelsteps]/dhs
+        h_t <<- Nu_t*K[(input$modelsteps+1):(2*input$modelsteps)]/dht
+        
+        
+        # Insert coefficents for shell
+        T_matrix[1,1] = 1
+        for (i in 2:input$modelsteps){
+          T_matrix[i,i] = 1
+          T_matrix[i,i-1] = -1 + h_s[i-1]*SA_ot*dz/(input$L*input$Fs*Cp[i-1])
+          T_matrix[i,i-1+2*input$modelsteps] = -h_s[i-1]*SA_ot*dz/(input$L*input$Fs*Cp[i-1])
+        }
+        
+        # Insert coefficents for tube
+        T_matrix[2*input$modelsteps,2*input$modelsteps] = 1
+        for (i in (input$modelsteps+1):(2*input$modelsteps-1)) {
+          T_matrix[i,i] = 1
+          T_matrix[i,i+1] = -1 + h_t[i+1-input$modelsteps]*SA_it*dz/(input$L*input$Ft*Cp[i+1])
+          T_matrix[i,i+1+input$modelsteps] = -h_t[i+1-input$modelsteps]*SA_it*dz/(input$L*input$Ft*Cp[i+1])
+        }
+        
+        # Insert coefficents for wall
+        for (i in (2*input$modelsteps+1):(3*input$modelsteps)) {
+          T_matrix[i,i] = -1
+          T_matrix[i,i-input$modelsteps] = h_t[i-2*input$modelsteps]*SA_it/(h_s[i-2*input$modelsteps]*SA_ot + h_t[i-2*input$modelsteps]*SA_it)
+          T_matrix[i,i-2*input$modelsteps] = h_s[i-2*input$modelsteps]*SA_ot/(h_s[i-2*input$modelsteps]*SA_ot + h_t[i-2*input$modelsteps]*SA_it)
+        }
+        
+        # Right hand side solution to matrix equation
+        rhs_vector = rep(0, input$modelsteps*3)
+        rhs_vector[1] = input$Tsi
+        rhs_vector[2*input$modelsteps] = input$Tti
+        
+        # Solve matrix problem using LU decomposition
+        x_vector <<- lusys(T_matrix,rhs_vector)
+        
+        err = sqrt(mean(((x_vector-Temp)/Temp)^2))*100
+        Temp = x_vector
+        print(err)
       }
       
-      init = c(input$Tsi,NA)
-      end = c(NA,input$Tti)
+      # Initialize heatmap data matrix without baffle columns
+      heatmapdata = matrix(ncol = input$modelsteps, nrow = 3)
       
-      sol = as.data.frame(bvptwp(yini = init, x = seq(0, input$L, by = dz), func = doublePipeNoBaffles, yend = end, parms = parms))
+      heatmapdata[1,1:input$modelsteps] = x_vector[1:input$modelsteps]
+      heatmapdata[2,1:input$modelsteps] = x_vector[(input$modelsteps+1):(2*input$modelsteps)]
+      heatmapdata[3,1:input$modelsteps] = x_vector[1:input$modelsteps]
       
+      heatmapdata <<- heatmapdata # save as global variable for debugging
+      
+      # Create border lines for tubes in heatmap
+      tubelines = list(
+        list(type = 'line', xref = "x", yref = "y",
+             x0 = -0.5, x1 = input$modelsteps-0.5,
+             y0 = 1.5, y1 = 1.5,
+             line = list(color = "black", width = 10)
+        ),
+        list(type = 'line', xref = "x", yref = "y",
+             x0 = -0.5, x1 = input$modelsteps-0.5,
+             y0 = 0.5, y1 = 0.5,
+             line = list(color = "black", width = 10)
+        )
+      )
+      
+      # Create plot and output
       output$plot1 = renderPlotly({
-       plot_ly(x = sol[,1], y = sol[,2], type = "scatter", mode = "lines", name = "Shell-side") %>%
-          add_trace(y = sol[,3], name = "Tube-side") %>%
+        plot_ly(z = heatmapdata, type = "heatmap", hoverinfo = 'text', 
+                text = list(paste(round(heatmapdata[1,1:(input$modelsteps)],digits = 2), "K", sep = " "),
+                            paste(round(heatmapdata[2,1:(input$modelsteps)],digits = 2), "K", sep = " "),
+                            paste(round(heatmapdata[3,1:(input$modelsteps)],digits = 2), "K", sep = " ")
+                ),
+                colorscale = "RdBu", 
+                colorbar = list(len = 1, title = list(text = "Temperature (K)",side = "right"))) %>%
+          config(displayModeBar = F) %>%
           layout(
+            shapes = tubelines,
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
             xaxis = list(
-              title = "x (m)",
-              zeroline = F
+              ticks = "",
+              showticklabels = F,
+              showgrid = F,
+              zeroline = F,
+              fixedrange = T
             ),
             yaxis = list(
-              title = "Temperature (K)",
-              zeroline = F
-            ),
-            legend = list(
-              orientation = "h",  
-              xanchor = "center",
-              x = 0.5,
-              y = -0.2
+              ticks = "",
+              showticklabels = F,
+              showgrid = F,
+              zeroline = F,
+              fixedrange = T
             )
           )
       })
-      
+    })
+    # Double-pipe with baffles --------------------------------------------------------------------------------------------  
     } else if (input$baffles > 0 && input$ntubes == 1) {withProgress(value = 0.5, message = "Calculation in progress...",{
       
       # Number of sections seperated b baffles
-      sections <<- input$baffles + 1
+      sections = input$baffles + 1
       
       # Number of model steps per section
-      stepsPerSection <<- ceiling(input$modelsteps/sections)
+      stepsPerSection = ceiling(input$modelsteps/sections)
       
       # Create matrix containing all calclated temp values
       T_matrix = matrix(data = 0, ncol = stepsPerSection*sections*4,nrow = stepsPerSection*sections*4)
