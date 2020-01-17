@@ -405,7 +405,7 @@ server = function(input,output,session){
       stepsPerSection = ceiling(input$modelsteps/sections)
       
       # Cross sectional area of the tube (m2)
-      CSA_t = pi/4*(input$tid^2)*Ntubes_row
+      CSA_t <<- pi/4*(input$tid^2)
       
       # Hydraulic diameter pipe
       dht = input$tid
@@ -416,8 +416,20 @@ server = function(input,output,session){
       
       # Chord length and cross-sectional area of shell per row
       chord_length = sqrt(2*pitch_y*(1:length(Ntubes_row))*input$sid/2 - (pitch_y*(1:length(Ntubes_row)))^2)
-      CSA_s = chord_length*input$L/sections
+      CSA_s = c(chord_length*input$L/(sections*stepsPerSection),0)
       
+      CSA_s_vector = vector()
+      for (i in 1:length(CSA_s)) {
+        for (j in 1:sections){
+          
+          if (j %% 2 == 0){
+            CSA_s_vector[(1+stepsPerSection*(j-1) + (i-1)*stepsPerSection*sections):(j*stepsPerSection + (i-1)*stepsPerSection*sections)] = rev(CSA_s)[i]
+          } else {
+            CSA_s_vector[(1+stepsPerSection*(j-1) + (i-1)*stepsPerSection*sections):(j*stepsPerSection + (i-1)*stepsPerSection*sections)] = CSA_s[i]
+          }
+        }
+      }
+
       # Number of tube rows
       nrows = length(Ntubes_row)
       
@@ -463,43 +475,51 @@ server = function(input,output,session){
         }
         
         # # Properties
-        # Dens <<- dens_lw(Temp)
-        # Cp <<- cp_lw(Temp)
-        # Mu <<- mu_lw(Temp)
-        # K <<- k_lw(Temp)
-        # 
-        # # Reynolds #
-        # for (i in 1:(length(Ntubes_row)+1)) {
-        #   vs <<- input$Fs/(Dens[1+i*stepsPerSection*sections]*CSA_s[i])
-        #   
-        #   
-        # }
-        # vs <<- input$Fs/(Dens[1:stepsPerSection*sections*(nrows+1)]*CSA_s)
-        # vt <<- input$Ft/(Dens[(stepsPerSection*sections*(nrows+1)+1):stepsPerSection*sections*(2*nrows+1)]*CSA_t)
-        # Re_s <<- Dens[1:stepsPerSection*sections*(nrows+1)]*dhs*vs/Mu[1:stepsPerSection*sections*(nrows+1)]
-        # Re_t <<- Dens[(stepsPerSection*sections*(nrows+1)+1):stepsPerSection*sections*(2*nrows+1)]*dht*vt/Mu[(stepsPerSection*sections*(nrows+1)+1):stepsPerSection*sections*(2*nrows+1)]
-        # 
-        # # Prandtl #
-        # Pr_s <<- Mu[1:stepsPerSection*sections*(nrows+1)]*Cp[1:stepsPerSection*sections*(nrows+1)]/K[1:stepsPerSection*sections*(nrows+1)]
-        # Pr_t <<- Mu[(stepsPerSection*sections*(nrows+1)+1):stepsPerSection*sections*(2*nrows+1)]*Cp[(stepsPerSection*sections*(nrows+1)+1):stepsPerSection*sections*(2*nrows+1)]/K[(stepsPerSection*sections*(nrows+1)+1):stepsPerSection*sections*(2*nrows+1)]
-        # 
-        # # Graetz #
+        Dens <<- dens_lw(Temp)
+        Cp <<- cp_lw(Temp)
+        Mu <<- mu_lw(Temp)
+        K <<- k_lw(Temp)
+         
+        # Reynolds #
+        vs = input$Fs/(Dens[1:stepsPerSection*sections]*CSA_s_vector)
+        vt = input$Ft/(Dens[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]*CSA_t*sum(Ntubes_row))
+        
+        vs_max = vs*pitch_x/(pitch_x-(input$tid + 2*input$tt))
+        
+        if (input$config == "triangle" && pitch_x >= input$tid + 2*input$tt + 2*(sqrt((pitch_x/2)^2 + pitch_y^2) - input$tid - 2*input$tt)) {
+          pitch_diag = sqrt((pitch_x/2)^2 + pitch_y^2)
+          vs_max = pitch_x/2*vs/(pitch_diag - input$tid - 2*input$tt)
+        } 
+        
+        Re_s <<- Dens[1:stepsPerSection*sections*(nrows+1)]*dht*vs_max/Mu[1:stepsPerSection*sections*(nrows+1)]
+        Re_t <<- Dens[(stepsPerSection*sections*(nrows+1)+1):stepsPerSection*sections*(2*nrows+1)]*dht*vt/Mu[(stepsPerSection*sections*(nrows+1)+1):stepsPerSection*sections*(2*nrows+1)]
+        
+        
+        
+        # Prandtl #
+        Pr_s <<- Mu[1:stepsPerSection*sections*(nrows+1)]*Cp[1:stepsPerSection*sections*(nrows+1)]/K[1:stepsPerSection*sections*(nrows+1)]
+        Pr_t <<- Mu[(stepsPerSection*sections*(nrows+1)+1):stepsPerSection*sections*(2*nrows+1)]*Cp[(stepsPerSection*sections*(nrows+1)+1):stepsPerSection*sections*(2*nrows+1)]/K[(stepsPerSection*sections*(nrows+1)+1):stepsPerSection*sections*(2*nrows+1)]
+        
+        # Graetz #
         # Gz_s <<- dhs/input$L*Re_s*Pr_s
         # Gz_t <<- dht/input$L*Re_t*Pr_t
-        # 
-        # # Nusselt #
-        # if (mean(Re_s) > 2100) {
-        #   Nu_s <<- 0.027*Re_s^0.8*Pr_s^(1/3)*(Mu[1:stepsPerSection*sections]/Mu[(2*stepsPerSection*sections+1):(3*stepsPerSection*sections)])^0.14
-        # } else {
-        #   Nu_s <<- 1.86*Gz_s^(1/3)*(Mu[1:stepsPerSection*sections]/Mu[(2*stepsPerSection*sections+1):(3*stepsPerSection*sections)])^0.14
-        # }
-        # 
-        # if (mean(Re_t) > 2100) {
-        #   Nu_t <<- 0.027*Re_t^0.8*Pr_t^(1/3)*(Mu[(stepsPerSection*sections+1):(2*stepsPerSection*sections)]/Mu[(2*stepsPerSection*sections+1):(3*stepsPerSection*sections)])^0.14
-        # } else {
-        #   Nu_t <<- 1.86*Gz_t^(1/3)*(Mu[(stepsPerSection*sections+1):(2*stepsPerSection*sections)]/Mu[(2*stepsPerSection*sections+1):(3*stepsPerSection*sections)])^0.14
-        # }
-        # 
+        
+        # Nusselt #
+        
+        Nu_D = function()
+        
+        if (mean(Re_s) > 2100) {
+          Nu_s <<- 0.027*Re_s^0.8*Pr_s^(1/3)*(Mu[1:stepsPerSection*sections]/Mu[(2*stepsPerSection*sections+1):(3*stepsPerSection*sections)])^0.14
+        } else {
+          Nu_s <<- 1.86*Gz_s^(1/3)*(Mu[1:stepsPerSection*sections]/Mu[(2*stepsPerSection*sections+1):(3*stepsPerSection*sections)])^0.14
+        }
+
+        if (mean(Re_t) > 2100) {
+          Nu_t <<- 0.027*Re_t^0.8*Pr_t^(1/3)*(Mu[(stepsPerSection*sections+1):(2*stepsPerSection*sections)]/Mu[(2*stepsPerSection*sections+1):(3*stepsPerSection*sections)])^0.14
+        } else {
+          Nu_t <<- 1.86*Gz_t^(1/3)*(Mu[(stepsPerSection*sections+1):(2*stepsPerSection*sections)]/Mu[(2*stepsPerSection*sections+1):(3*stepsPerSection*sections)])^0.14
+        }
+
         # # Heat transfer coeffcient
         # h_s <<- Nu_s*K[1:stepsPerSection*sections]/dhs
         # h_t <<- Nu_t*K[(stepsPerSection*sections+1):(2*stepsPerSection*sections)]/dht
