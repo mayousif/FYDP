@@ -44,7 +44,7 @@ server = function(input,output,session){
     }
     
     # Double-pipe, no baffles --------------------------------------------------------------------------------------------  
-    if (input$baffles == 0 && input$ntubes == 1) {withProgress(value = 0.5, message = "Calculation in progress...",{
+    if (input$baffles == 0) {withProgress(value = 0.5, message = "Calculation in progress...",{
       
       # Cross sectional area of the shell (m2)
       CSA_s = pi/4*(input$sid^2-(input$tid+2*input$tt)^2)
@@ -195,13 +195,25 @@ server = function(input,output,session){
       })
     })
     # Double-pipe with baffles --------------------------------------------------------------------------------------------  
-    } else if (input$baffles > 0 && input$ntubes == 1) {withProgress(value = 0.5, message = "Calculation in progress...",{
+    } else if (input$baffles > 0 && length(Ntubes_row) == 1) {withProgress(value = 0.5, message = "Calculation in progress...",{
+      
+      
+      # Cross sectional area of the tube (m2)
+      CSA_t = pi/4*(input$tid^2)
+      
+      # Hydraulic diameter shell/pipe
+      dht = input$tid
       
       # Number of sections seperated b baffles
       sections = input$baffles + 1
       
       # Number of model steps per section
       stepsPerSection = ceiling(input$modelsteps/sections)
+      
+      # Inital temperature estimate vector
+      Temp <<- c(rep(input$Tsi,times = 2*sections*stepsPerSection),
+                 rep(input$Tti,times = sections*stepsPerSection),
+                 rep(mean(c(input$Tti,input$Tsi)),times = sections*stepsPerSection))
       
       # Create matrix containing all calclated temp values
       T_matrix = matrix(data = 0, ncol = stepsPerSection*sections*4,nrow = stepsPerSection*sections*4)
@@ -280,10 +292,9 @@ server = function(input,output,session){
       # Solve matrix problem using LU decomposition
       x_vector <<- lusys(T_matrix,rhs_vector)
       
-    })
-      
+
       # Initialize heatmap data matrix without baffle columns
-      heatmapdata = matrix(ncol = stepsPerSection*sections, nrow = 3)
+      heatmapdata = matrix(ncol = stepsPerSection*sections, nrow = 2)
       
       # Insert tube temperatures
       heatmapdata[2,] = x_vector[(stepsPerSection*sections*2 + 1):(stepsPerSection*sections*3)]
@@ -292,7 +303,7 @@ server = function(input,output,session){
       hmsection = 1
       counter = 2
       for (i in 1:(sections*2)) {
-        
+
         block = ceiling(i/2)
         if (counter == 2 && hmsection == 1) {
           heatmapdata[hmsection,(1 + (block-1)*stepsPerSection):(block*stepsPerSection)] = x_vector[(1 + stepsPerSection*(i-1)):(stepsPerSection*i)]
@@ -309,7 +320,7 @@ server = function(input,output,session){
           heatmapdata[hmsection,(1 + (block-1)*stepsPerSection):(block*stepsPerSection)] = x_vector[(1 + stepsPerSection*(i-1)):(stepsPerSection*i)]
           counter = counter + 1
         }
-        
+
       }
       
       heatmapdata <<- heatmapdata # save as global variable for debugging
@@ -380,9 +391,291 @@ server = function(input,output,session){
               fixedrange = T
             )
           )
+        
+        })
       })
       
-    } else if (input$baffles > 0 && input$ntubes > 1) {withProgress(value = 0.5, message = "Calculation in progress...",{
+    # Shell and tube with baffles --------------------------------------------------------------------------
+    } else if (input$baffles > 0 && length(Ntubes_row) > 1) {withProgress(value = 0.5, message = "Calculation in progress...",{
+      
+      # Number of sections seperated by baffles
+      sections = input$baffles + 1
+      
+      # Number of model steps per section
+      stepsPerSection = ceiling(input$modelsteps/sections)
+      
+      # Cross sectional area of the tube (m2)
+      CSA_t = pi/4*(input$tid^2)*Ntubes_row
+      
+      # Hydraulic diameter pipe
+      dht = input$tid
+      
+      # Calculate space between tubes
+      pitch_x = input$sid/max(Ntubes_row + 1)
+      pitch_y = input$sid/(length(Ntubes_row) + 1)
+      
+      # Chord length and cross-sectional area of shell per row
+      chord_length = sqrt(2*pitch_y*(1:length(Ntubes_row))*input$sid/2 - (pitch_y*(1:length(Ntubes_row)))^2)
+      CSA_s = chord_length*input$L/sections
+      
+      # Number of tube rows
+      nrows = length(Ntubes_row)
+      
+      # Inital temperature estimate vector
+      Temp <<- c(rep(input$Tsi,times = (nrows+1)*sections*stepsPerSection),
+                 rep(input$Tti,times = nrows*sections*stepsPerSection),
+                 rep(mean(c(input$Tti,input$Tsi)),times = nrows*sections*stepsPerSection))
+      err = 1
+      #while (err > 0.001) { 
+        # Create matrix containing all calclated temp values
+        T_matrix = matrix(data = 0, ncol = stepsPerSection*sections*(3*nrows+1),nrow = stepsPerSection*sections*(3*nrows+1))
+        
+        # Initial values + averaging for next section
+        for (i in seq(1,sections*stepsPerSection,by = stepsPerSection*2)) {
+          
+          T_matrix[i:(stepsPerSection+i-1),i:(stepsPerSection+i-1)] = diag(stepsPerSection)
+          
+        }
+        for (i in seq(sections*stepsPerSection*nrows+stepsPerSection+1,sections*stepsPerSection*(nrows+1),by = stepsPerSection*2)) {
+          
+          T_matrix[i:(stepsPerSection+i-1),i:(stepsPerSection+i-1)] = diag(stepsPerSection)
+          
+        }
+        for (i in seq(1+stepsPerSection*2,sections*stepsPerSection,by = stepsPerSection*2)) {
+          
+          T_matrix[i:(stepsPerSection+i-1),(i-stepsPerSection):(i-1)] = matrix(data = -1/stepsPerSection,ncol = stepsPerSection, nrow = stepsPerSection)
+          
+        }
+        for (i in seq(sections*stepsPerSection*nrows+stepsPerSection+1,sections*stepsPerSection*(nrows+1),by = stepsPerSection*2)) {
+          
+          T_matrix[i:(stepsPerSection+i-1),(i-stepsPerSection):(i-1)] = matrix(data = -1/stepsPerSection,ncol = stepsPerSection, nrow = stepsPerSection)
+          
+        }
+        
+        # Right hand side solution to matrix equation
+        rhs_vector = rep(0, stepsPerSection*sections*(3*nrows+1))
+        rhs_vector[1:stepsPerSection] = input$Tsi
+        
+        # Known inlet tube stuff for matrix
+        for (i in seq(sections*stepsPerSection*(nrows+2),sections*stepsPerSection*(2*nrows+1),by = sections*stepsPerSection)) {
+          T_matrix[i,i] = 1
+          rhs_vector[i] = input$Tti
+        }
+        
+        # # Properties
+        # Dens <<- dens_lw(Temp)
+        # Cp <<- cp_lw(Temp)
+        # Mu <<- mu_lw(Temp)
+        # K <<- k_lw(Temp)
+        # 
+        # # Reynolds #
+        # for (i in 1:(length(Ntubes_row)+1)) {
+        #   vs <<- input$Fs/(Dens[1+i*stepsPerSection*sections]*CSA_s[i])
+        #   
+        #   
+        # }
+        # vs <<- input$Fs/(Dens[1:stepsPerSection*sections*(nrows+1)]*CSA_s)
+        # vt <<- input$Ft/(Dens[(stepsPerSection*sections*(nrows+1)+1):stepsPerSection*sections*(2*nrows+1)]*CSA_t)
+        # Re_s <<- Dens[1:stepsPerSection*sections*(nrows+1)]*dhs*vs/Mu[1:stepsPerSection*sections*(nrows+1)]
+        # Re_t <<- Dens[(stepsPerSection*sections*(nrows+1)+1):stepsPerSection*sections*(2*nrows+1)]*dht*vt/Mu[(stepsPerSection*sections*(nrows+1)+1):stepsPerSection*sections*(2*nrows+1)]
+        # 
+        # # Prandtl #
+        # Pr_s <<- Mu[1:stepsPerSection*sections*(nrows+1)]*Cp[1:stepsPerSection*sections*(nrows+1)]/K[1:stepsPerSection*sections*(nrows+1)]
+        # Pr_t <<- Mu[(stepsPerSection*sections*(nrows+1)+1):stepsPerSection*sections*(2*nrows+1)]*Cp[(stepsPerSection*sections*(nrows+1)+1):stepsPerSection*sections*(2*nrows+1)]/K[(stepsPerSection*sections*(nrows+1)+1):stepsPerSection*sections*(2*nrows+1)]
+        # 
+        # # Graetz #
+        # Gz_s <<- dhs/input$L*Re_s*Pr_s
+        # Gz_t <<- dht/input$L*Re_t*Pr_t
+        # 
+        # # Nusselt #
+        # if (mean(Re_s) > 2100) {
+        #   Nu_s <<- 0.027*Re_s^0.8*Pr_s^(1/3)*(Mu[1:stepsPerSection*sections]/Mu[(2*stepsPerSection*sections+1):(3*stepsPerSection*sections)])^0.14
+        # } else {
+        #   Nu_s <<- 1.86*Gz_s^(1/3)*(Mu[1:stepsPerSection*sections]/Mu[(2*stepsPerSection*sections+1):(3*stepsPerSection*sections)])^0.14
+        # }
+        # 
+        # if (mean(Re_t) > 2100) {
+        #   Nu_t <<- 0.027*Re_t^0.8*Pr_t^(1/3)*(Mu[(stepsPerSection*sections+1):(2*stepsPerSection*sections)]/Mu[(2*stepsPerSection*sections+1):(3*stepsPerSection*sections)])^0.14
+        # } else {
+        #   Nu_t <<- 1.86*Gz_t^(1/3)*(Mu[(stepsPerSection*sections+1):(2*stepsPerSection*sections)]/Mu[(2*stepsPerSection*sections+1):(3*stepsPerSection*sections)])^0.14
+        # }
+        # 
+        # # Heat transfer coeffcient
+        # h_s <<- Nu_s*K[1:stepsPerSection*sections]/dhs
+        # h_t <<- Nu_t*K[(stepsPerSection*sections+1):(2*stepsPerSection*sections)]/dht
+        # 
+        # 
+        # 
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        # Matrix coefficients
+        shellCoefficient1 = 1 - input$hs*SA_ot/(sections*2*input$Fs*input$Cps)
+        shellCoefficient2 = -1 - input$hs*SA_ot/(sections*2*input$Fs*input$Cps)
+        shellCoefficient3 = input$hs*SA_ot/(sections*input$Fs*input$Cps)
+        tubeCoefficient1 = -1
+        tubeCoefficient2 = 1 - input$ht*SA_it/(sections*stepsPerSection*input$Ft*input$Cpt)
+        tubeCoefficient3 = input$ht*SA_it/(sections*stepsPerSection*input$Ft*input$Cpt)
+        wallCoefficient1 = input$hs*SA_ot/(2*(input$hs*SA_ot + input$ht*SA_it))
+        wallCoefficient2 = wallCoefficient1
+        wallCoefficient3 = input$ht*SA_it/(input$hs*SA_ot + input$ht*SA_it)
+        wallCoefficient4 = -1
+        
+        # Shell for the shell equation (downward flow)
+        for (i in seq(1+stepsPerSection*sections,sections*stepsPerSection*2,by = stepsPerSection*2)) {
+          for (j in seq(0,(length(Ntubes_row)-1)*sections*stepsPerSection,by = sections*stepsPerSection)) {
+            
+            T_matrix[(i+j):(stepsPerSection+i+j-1),(i+j):(stepsPerSection+i+j-1)] = diag(stepsPerSection)*shellCoefficient2
+            T_matrix[(i+j):(stepsPerSection+i+j-1),(i+j-sections*stepsPerSection):(i+j-sections*stepsPerSection+stepsPerSection-1)] = diag(stepsPerSection)*shellCoefficient1
+          }
+        }
+        
+        # Shell for the shell equation (upward flow)
+        for (i in seq(1+stepsPerSection,sections*stepsPerSection,by = stepsPerSection*2)) {
+          for (j in seq(0,(length(Ntubes_row)-1)*sections*stepsPerSection,by = sections*stepsPerSection)) {
+            
+            T_matrix[(i+j):(stepsPerSection+i+j-1),(i+j):(stepsPerSection+i+j-1)] = diag(stepsPerSection)*shellCoefficient2
+            T_matrix[(i+j):(stepsPerSection+i+j-1),(i+j+sections*stepsPerSection):(i+j+sections*stepsPerSection+stepsPerSection-1)] = diag(stepsPerSection)*shellCoefficient1
+          }
+        }
+        
+        # Wall part for the shell equation
+        for (i in seq(1+stepsPerSection*sections,sections*stepsPerSection*2,by = stepsPerSection*2)) {
+          for (j in seq(0,(length(Ntubes_row)-1)*sections*stepsPerSection,by = sections*stepsPerSection)) {
+            
+            T_matrix[(i+j):(stepsPerSection+i+j-1),(sections*stepsPerSection*2*length(Ntubes_row)+i+j):(sections*stepsPerSection*2*length(Ntubes_row)+i+j+stepsPerSection-1)] = diag(stepsPerSection)*shellCoefficient3
+          }
+        }
+        
+        for (i in seq(1+stepsPerSection,sections*stepsPerSection,by = stepsPerSection*2)) {
+          for (j in seq(0,(length(Ntubes_row)-1)*sections*stepsPerSection,by = sections*stepsPerSection)) {
+            
+            T_matrix[(i+j):(stepsPerSection+i+j-1),(sections*stepsPerSection*(2*length(Ntubes_row)+1)+i+j):(sections*stepsPerSection*(2*length(Ntubes_row)+1)+i+j+stepsPerSection-1)] = diag(stepsPerSection)*shellCoefficient3  
+          }
+        }
+        
+        # Tube section of matrix
+        for (i in seq(1+stepsPerSection*sections*(length(Ntubes_row)+1),stepsPerSection*sections*(length(Ntubes_row)+2)-1)) {
+          for (j in seq(0,(length(Ntubes_row)-1)*sections*stepsPerSection,by = sections*stepsPerSection)) {
+            T_matrix[(i+j),(i+j)] = tubeCoefficient1
+            T_matrix[(i+j),(i+j+1)] = tubeCoefficient2
+            T_matrix[(i+j),(i+j+1+length(Ntubes_row)*sections*stepsPerSection)] = tubeCoefficient3
+          }
+        }
+        
+        # Known inlet tube stuff for matrix
+        for (i in seq(sections*stepsPerSection*(length(Ntubes_row)+2),sections*stepsPerSection*(2*length(Ntubes_row)+1),by = sections*stepsPerSection)) {
+          T_matrix[i,i] = 1
+          rhs_vector[i] = input$Tti
+        }
+        
+        # Wall section of matrix
+        for (i in seq((2*length(Ntubes_row)+1)*stepsPerSection*sections+1, (3*length(Ntubes_row)+1)*stepsPerSection*sections,by = 1)) {
+          T_matrix[i,(i-(2*length(Ntubes_row)+1)*stepsPerSection*sections)] = wallCoefficient1
+          T_matrix[i,(i-2*length(Ntubes_row)*stepsPerSection*sections)] = wallCoefficient2
+          T_matrix[i,(i-length(Ntubes_row)*stepsPerSection*sections)] = wallCoefficient3
+          T_matrix[i,i] = wallCoefficient4
+        }
+        
+        # Solve matrix problem using LU decomposition
+        x_vector <<- lusys(T_matrix,rhs_vector)
+        
+      #}
+      
+      
+      # Initialize heatmap data matrix without baffle columns
+      heatmapdata = matrix(ncol = stepsPerSection*sections, nrow = 2*length(Ntubes_row)+1)
+      
+      # Insert tube temperatures
+      for (i in 1:(length(Ntubes_row)+1)) {
+        
+
+        heatmapdata[2*i - 1,1:(stepsPerSection*sections)] = x_vector[((i-1)*stepsPerSection*sections + 1):(i*stepsPerSection*sections)]
+
+      }
+      
+      for (i in 1:length(Ntubes_row)) {
+        heatmapdata[2*i,1:(stepsPerSection*sections)] = x_vector[(i*stepsPerSection*sections + sections*stepsPerSection*length(Ntubes_row) + 1):(i*stepsPerSection*sections + sections*stepsPerSection*(length(Ntubes_row) + 1))]
+        
+      }
+      
+      
+      heatmapdata <<- heatmapdata # save as global variable for debugging
+      
+      tubelines = list()
+      # Create border lines for tubes in heatmap
+      for (i in 1:(2*length(Ntubes_row))) {
+        tubelines = c(tubelines,
+                      list(list(type = 'line', xref = "x", yref = "y",
+                           x0 = -0.5, x1 = sections*stepsPerSection-0.5,
+                           y0 = i-0.5, y1 = i-0.5,
+                           line = list(color = "black", width = 10)
+                          )
+                        )
+                      )
+      }
+      
+      # Create lines for baffles in heatmap
+      baffleline = list(
+        type = "line",
+        line = list(color = "black", width = 10),
+        xref = "x",
+        yref = "y"
+      )
+      
+      # Store all line objects in one variable
+      lines = list()
+      for (i in 1:(sections-1)) {
+        baffleline[["x0"]] = i*stepsPerSection-0.5
+        baffleline[["x1"]] = i*stepsPerSection-0.5
+        if ((i %% 2) == 0) {
+          baffleline[c("y0", "y1")] = c(0,2*length(Ntubes_row)+0.5)
+        } else {
+          baffleline[c("y0", "y1")] = c(-0.5,2*length(Ntubes_row))
+        }
+        lines = c(lines, list(baffleline))
+      }
+      
+      lines = c(lines,tubelines)
+      
+      # Create plot and output
+      output$plot1 = renderPlotly({
+        plot_ly(z = heatmapdata, type = "heatmap", hoverinfo = 'text', 
+                #text = list(paste(round(heatmapdata[1,1:(sections*stepsPerSection)],digits = 2), "K", sep = " "),
+                       #     paste(round(heatmapdata[2,1:(sections*stepsPerSection)],digits = 2), "K", sep = " "),
+                       #     paste(round(heatmapdata[3,1:(sections*stepsPerSection)],digits = 2), "K", sep = " ")
+                #),
+                colorscale = "RdBu", 
+                colorbar = list(len = 1, title = list(text = "Temperature (K)",side = "right"))) %>%
+          config(displayModeBar = F) %>%
+          layout(
+            shapes = lines,
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            xaxis = list(
+              ticks = "",
+              showticklabels = F,
+              showgrid = F,
+              zeroline = F,
+              fixedrange = T
+            ),
+            yaxis = list(
+              ticks = "",
+              showticklabels = F,
+              showgrid = F,
+              zeroline = F,
+              fixedrange = T
+            )
+          )
+      })
+    })
+    } else if (input$baffles > 0) {withProgress(value = 0.5, message = "Calculation in progress...",{
       
       
       })
