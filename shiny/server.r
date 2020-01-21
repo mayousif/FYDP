@@ -474,14 +474,14 @@ server = function(input,output,session){
           rhs_vector[i] = input$Tti
         }
         
-        # # Properties
+        # Properties
         Dens <<- dens_lw(Temp)
         Cp <<- cp_lw(Temp)
         Mu <<- mu_lw(Temp)
         K <<- k_lw(Temp)
          
         # Reynolds #
-        vs = input$Fs/(Dens[1:stepsPerSection*sections]*CSA_s_vector)
+        vs = input$Fs/(Dens[1:(stepsPerSection*sections)]*CSA_s_vector)
         vt = input$Ft/(Dens[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]*CSA_t*sum(Ntubes_row))
         
         vs_max = vs*pitch_x/(pitch_x-(input$tid + 2*input$tt))
@@ -491,60 +491,106 @@ server = function(input,output,session){
           vs_max = pitch_x/2*vs/(pitch_diag - input$tid - 2*input$tt)
         } 
         
-        Re_s <<- Dens[1:stepsPerSection*sections*(nrows+1)]*dht*vs_max/Mu[1:stepsPerSection*sections*(nrows+1)]
-        Re_t <<- Dens[(stepsPerSection*sections*(nrows+1)+1):stepsPerSection*sections*(2*nrows+1)]*dht*vt/Mu[(stepsPerSection*sections*(nrows+1)+1):stepsPerSection*sections*(2*nrows+1)]
-        
+        Re_s <<- Dens[1:(stepsPerSection*sections*(nrows+1))]*dht*vs_max/Mu[1:(stepsPerSection*sections*(nrows+1))]
+        Re_t <<- Dens[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]*dht*vt/Mu[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]
+        Re_d <<- Dens[1:(stepsPerSection*sections*(nrows+1))]*dht*vs/Mu[1:(stepsPerSection*sections*(nrows+1))]
         
         
         # Prandtl #
-        Pr_s <<- Mu[1:stepsPerSection*sections*(nrows+1)]*Cp[1:stepsPerSection*sections*(nrows+1)]/K[1:stepsPerSection*sections*(nrows+1)]
-        Pr_t <<- Mu[(stepsPerSection*sections*(nrows+1)+1):stepsPerSection*sections*(2*nrows+1)]*Cp[(stepsPerSection*sections*(nrows+1)+1):stepsPerSection*sections*(2*nrows+1)]/K[(stepsPerSection*sections*(nrows+1)+1):stepsPerSection*sections*(2*nrows+1)]
+        Pr_s <<- Mu[1:(stepsPerSection*sections*(nrows+1))]*Cp[1:(stepsPerSection*sections*(nrows+1))]/K[1:(stepsPerSection*sections*(nrows+1))]
+        Pr_t <<- Mu[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]*Cp[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]/K[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]
+        Pr_w <<- Mu[(stepsPerSection*sections*(2*nrows+1)+1):(stepsPerSection*sections*(3*nrows+1))]*Cp[(stepsPerSection*sections*(2*nrows+1)+1):(stepsPerSection*sections*(3*nrows+1))]/K[(stepsPerSection*sections*(2*nrows+1)+1):(stepsPerSection*sections*(3*nrows+1))]
+        
+        
+        # Create Pr_w vector that matches the shell vector
+        Pr_w_aligned <<- vector(mode = "numeric",length = stepsPerSection*sections*(nrows+1)) - 999
+        
+        for (i in seq(1,stepsPerSection*sections*(nrows+1), by = 2*stepsPerSection)) {
+          Pr_w_aligned[i:(i+stepsPerSection-1)] = Pr_w[i:(i+stepsPerSection-1)]
+        }
+        
+        for (i in seq(stepsPerSection*sections + stepsPerSection + 1,stepsPerSection*sections*(nrows + 1), by = 2*stepsPerSection)) {
+          Pr_w_aligned[i:(i+stepsPerSection-1)] = Pr_w[(i-stepsPerSection*sections):(i+stepsPerSection-stepsPerSection*sections-1)]
+        }
+        
+        Pr_w_aligned[is.na(Pr_w_aligned)] = -999
         
         # Graetz #
-        # Gz_s <<- dhs/input$L*Re_s*Pr_s
-        # Gz_t <<- dht/input$L*Re_t*Pr_t
+        Gz_t <<- dht/input$L*Re_t*Pr_t
         
         # Nusselt #
+        Nuss_func = function(C,m) {
+          Nuss = C*(Re_s^m)*(Pr_s^0.36)*(Pr_s/Pr_w_aligned)^0.25
+          return(Nuss)
+        } 
         
-        Nu_D = function()
-        
-        if (mean(Re_s) > 2100) {
-          Nu_s <<- 0.027*Re_s^0.8*Pr_s^(1/3)*(Mu[1:stepsPerSection*sections]/Mu[(2*stepsPerSection*sections+1):(3*stepsPerSection*sections)])^0.14
+        # Configuration if statement
+        if (input$config == "square") {
+          
+          # Reynolds if statement
+          if (mean(Re_s) < 100) {
+            Nu_s = Nuss_func(0.8,0.4)
+          } else if (mean(Re_s) < 1000) {
+            Nu_s = 0.3 + (0.62*(Re_d^0.5)*Pr_s^(1/3))/((1+(0.4/Pr_s)^(2/3))^0.25)*((1+(Re_d/282000)^0.625)^(0.8))
+          } else if (mean(Re_s) < 200000) {
+            Nu_s = Nuss_func(0.27,0.63)
+          } else {
+            Nu_s = Nuss_func(0.021,0.84)
+          }
+          
         } else {
-          Nu_s <<- 1.86*Gz_s^(1/3)*(Mu[1:stepsPerSection*sections]/Mu[(2*stepsPerSection*sections+1):(3*stepsPerSection*sections)])^0.14
+          if (mean(Re_s) < 100) {
+            Nu_s = Nuss_func(0.9,0.4)
+          } else if (mean(Re_s) < 1000) {
+            Nu_s = 0.3 + (0.62*(Re_d^0.5)*Pr_s^(1/3))/((1+(0.4/Pr_s)^(2/3))^0.25)*((1+(Re_d/282000)^0.625)^(0.8))
+          } else if (mean(Re_s) < 200000) {
+            # Pitch if statement
+            if (pitch_x/pitch_y < 2) {
+              Nu_s = Nuss_func(0.35*(pitch_x/pitch_y)^0.2,0.6)
+            } else {
+              Nu_s = Nuss_func(0.4,0.6)
+            }
+          } else {
+            Nu_s = Nuss_func(0.022,0.84)
+          }
         }
-
+        
         if (mean(Re_t) > 2100) {
-          Nu_t <<- 0.027*Re_t^0.8*Pr_t^(1/3)*(Mu[(stepsPerSection*sections+1):(2*stepsPerSection*sections)]/Mu[(2*stepsPerSection*sections+1):(3*stepsPerSection*sections)])^0.14
+          Nu_t <<- 0.027*Re_t^0.8*Pr_t^(1/3)*(Mu[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]/Mu[(stepsPerSection*sections*(2*nrows+1)+1):(stepsPerSection*sections*(3*nrows+1))])^0.14
         } else {
-          Nu_t <<- 1.86*Gz_t^(1/3)*(Mu[(stepsPerSection*sections+1):(2*stepsPerSection*sections)]/Mu[(2*stepsPerSection*sections+1):(3*stepsPerSection*sections)])^0.14
+          Nu_t <<- 1.86*Gz_t^(1/3)*(Mu[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]/Mu[(stepsPerSection*sections*(2*nrows+1)+1):(stepsPerSection*sections*(3*nrows+1))])^0.14
         }
-
-        # # Heat transfer coeffcient
-        # h_s <<- Nu_s*K[1:stepsPerSection*sections]/dhs
-        # h_t <<- Nu_t*K[(stepsPerSection*sections+1):(2*stepsPerSection*sections)]/dht
-        # 
-        # 
-        # 
         
         
+        # Heat transfer coeffcient
+        h_s <<- Nu_s*K[1:(stepsPerSection*sections*(nrows+1))]/dht
+        h_t <<- Nu_t*K[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]/dht
         
-        
-        
-        
+        # Adjust h_s for number of tubes
+        CSA_s_vector = vector()
+        for (i in 1:length(CSA_s)) {
+          for (j in 1:sections){
+            
+            if (j %% 2 == 0){
+              CSA_s_vector[(1+stepsPerSection*(j-1) + (i-1)*stepsPerSection*sections):(j*stepsPerSection + (i-1)*stepsPerSection*sections)] = rev(CSA_s)[i]
+            } else {
+              CSA_s_vector[(1+stepsPerSection*(j-1) + (i-1)*stepsPerSection*sections):(j*stepsPerSection + (i-1)*stepsPerSection*sections)] = CSA_s[i]
+            }
+          }
+        }
         
         
         
         # Matrix coefficients
-        shellCoefficient1 = 1 - input$hs*SA_ot/(sections*2*input$Fs*input$Cps)
-        shellCoefficient2 = -1 - input$hs*SA_ot/(sections*2*input$Fs*input$Cps)
-        shellCoefficient3 = input$hs*SA_ot/(sections*input$Fs*input$Cps)
+        shellCoefficient1 = 1 - h_s*SA_ot/(sections*2*input$Fs*input$Cps)
+        shellCoefficient2 = -1 - h_s*SA_ot/(sections*2*input$Fs*input$Cps)
+        shellCoefficient3 = h_s*SA_ot/(sections*input$Fs*input$Cps)
         tubeCoefficient1 = -1
-        tubeCoefficient2 = 1 - input$ht*SA_it/(sections*stepsPerSection*input$Ft*input$Cpt)
-        tubeCoefficient3 = input$ht*SA_it/(sections*stepsPerSection*input$Ft*input$Cpt)
-        wallCoefficient1 = input$hs*SA_ot/(2*(input$hs*SA_ot + input$ht*SA_it))
+        tubeCoefficient2 = 1 - h_t*SA_it/(sections*stepsPerSection*input$Ft*input$Cpt)
+        tubeCoefficient3 = h_t*SA_it/(sections*stepsPerSection*input$Ft*input$Cpt)
+        wallCoefficient1 = h_s*SA_ot/(2*(h_s*SA_ot + h_t*SA_it))
         wallCoefficient2 = wallCoefficient1
-        wallCoefficient3 = input$ht*SA_it/(input$hs*SA_ot + input$ht*SA_it)
+        wallCoefficient3 = h_t*SA_it/(h_s*SA_ot + h_t*SA_it)
         wallCoefficient4 = -1
         
         # Shell for the shell equation (downward flow)
