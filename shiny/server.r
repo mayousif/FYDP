@@ -194,209 +194,209 @@ server = function(input,output,session){
           )
       })
     })
-    # Double-pipe with baffles --------------------------------------------------------------------------------------------  
-    } else if (input$baffles > 0 && length(Ntubes_row) == 1) {withProgress(value = 0.5, message = "Calculation in progress...",{
-      
-      
-      # Cross sectional area of the tube (m2)
-      CSA_t = pi/4*(input$tid^2)
-      
-      # Hydraulic diameter shell/pipe
-      dht = input$tid
-      
-      # Number of sections seperated b baffles
-      sections = input$baffles + 1
-      
-      # Number of model steps per section
-      stepsPerSection = ceiling(input$modelsteps/sections)
-      
-      # Inital temperature estimate vector
-      Temp <<- c(rep(input$Tsi,times = 2*sections*stepsPerSection),
-                 rep(input$Tti,times = sections*stepsPerSection),
-                 rep(mean(c(input$Tti,input$Tsi)),times = sections*stepsPerSection))
-      
-      # Create matrix containing all calclated temp values
-      T_matrix = matrix(data = 0, ncol = stepsPerSection*sections*4,nrow = stepsPerSection*sections*4)
-      
-      # Initial values + averaging for next section
-      for (i in seq(1,sections*stepsPerSection*2,by = stepsPerSection*2)) {
-        
-        T_matrix[i:(stepsPerSection+i-1),i:(stepsPerSection+i-1)] = diag(stepsPerSection)
-        
-      }
-      for (i in seq(1+stepsPerSection*2,sections*stepsPerSection*2,by = stepsPerSection*2)) {
-        
-        T_matrix[i:(stepsPerSection+i-1),(i-stepsPerSection):(i-1)] = matrix(data = -1/stepsPerSection,ncol = stepsPerSection, nrow = stepsPerSection)
-        
-      }
-      
-      # Right hand side solution to matrix equation
-      rhs_vector = rep(0, stepsPerSection*sections*4)
-      rhs_vector[1:stepsPerSection] = input$Tsi
-      
-      # Matrix coefficients
-      shellCoefficient1 = 1 - input$hs*SA_ot/(sections*2*input$Fs*input$Cps)
-      shellCoefficient2 = -1 - input$hs*SA_ot/(sections*2*input$Fs*input$Cps)
-      shellCoefficient3 = input$hs*SA_ot/(sections*input$Fs*input$Cps)
-      tubeCoefficient1 = -1
-      tubeCoefficient2 = 1 - input$ht*SA_it/(sections*stepsPerSection*input$Ft*input$Cpt)
-      tubeCoefficient3 = input$ht*SA_it/(sections*stepsPerSection*input$Ft*input$Cpt)
-      wallCoefficient1 = input$hs*SA_ot/(2*(input$hs*SA_ot + input$ht*SA_it))
-      wallCoefficient2 = wallCoefficient1
-      wallCoefficient3 = input$ht*SA_it/(input$hs*SA_ot + input$ht*SA_it)
-      wallCoefficient4 = -1
-      
-      # Shell top and bottom for the shell equation
-      for (i in seq(1+stepsPerSection,sections*stepsPerSection*2,by = stepsPerSection*2)) {
-        
-        T_matrix[i:(stepsPerSection+i-1),i:(stepsPerSection+i-1)] = diag(stepsPerSection)*shellCoefficient2
-        T_matrix[i:(stepsPerSection+i-1),(i-stepsPerSection):(i-1)] = diag(stepsPerSection)*shellCoefficient1
-        
-      }
-      
-      # Wall part for the shell equation
-      for (i in seq(1+stepsPerSection,sections*stepsPerSection*2,by = stepsPerSection*2)) {
-        j = stepsPerSection*sections*3+1 + (i-stepsPerSection-1)/2
-        T_matrix[i:(stepsPerSection+i-1),j:(j+stepsPerSection-1)] = diag(stepsPerSection)*shellCoefficient3
-      }
-      
-      # Tube section of matrix
-      for (i in seq(1+stepsPerSection*sections*2,stepsPerSection*sections*3-1)) {
-        T_matrix[i,i] = tubeCoefficient1
-        T_matrix[i,i+1] = tubeCoefficient2
-      }
-      
-      # Wall part of tube equation
-      for (i in seq(2+stepsPerSection*sections*3,stepsPerSection*sections*4)) {
-        T_matrix[i-stepsPerSection*sections-1,i] = tubeCoefficient3
-      }
-      
-      # Known inlet tube stuff for matrix
-      T_matrix[stepsPerSection*sections*3,stepsPerSection*sections*3] = 1
-      rhs_vector[stepsPerSection*sections*3] = input$Tti
-      
-      #
-      for (i in seq(1, stepsPerSection*sections,by = stepsPerSection)) {
-        rows = (i+stepsPerSection*sections*3):(i+stepsPerSection*sections*3+stepsPerSection-1)
-        col1 = (2*i-1):(2*i+stepsPerSection-2)
-        col2 = (2*i+stepsPerSection-1):(2*i+stepsPerSection*2-2)
-        col3 = rows - stepsPerSection*sections
-        
-        T_matrix[rows,col1] = diag(stepsPerSection)*wallCoefficient1
-        T_matrix[rows,col2] = diag(stepsPerSection)*wallCoefficient2
-        T_matrix[rows,col3] = diag(stepsPerSection)*wallCoefficient3
-        T_matrix[rows,rows] = diag(stepsPerSection)*wallCoefficient4
-        
-      }
-      
-      # Solve matrix problem using LU decomposition
-      x_vector <<- lusys(T_matrix,rhs_vector)
-      
-
-      # Initialize heatmap data matrix without baffle columns
-      heatmapdata = matrix(ncol = stepsPerSection*sections, nrow = 2)
-      
-      # Insert tube temperatures
-      heatmapdata[2,] = x_vector[(stepsPerSection*sections*2 + 1):(stepsPerSection*sections*3)]
-      
-      # Insert shell temperatures
-      hmsection = 1
-      counter = 2
-      for (i in 1:(sections*2)) {
-
-        block = ceiling(i/2)
-        if (counter == 2 && hmsection == 1) {
-          heatmapdata[hmsection,(1 + (block-1)*stepsPerSection):(block*stepsPerSection)] = x_vector[(1 + stepsPerSection*(i-1)):(stepsPerSection*i)]
-          hmsection = 3
-          counter = 1
-        } else if (counter == 2 && hmsection == 3) {
-          heatmapdata[hmsection,(1 + (block-1)*stepsPerSection):(block*stepsPerSection)] = x_vector[(1 + stepsPerSection*(i-1)):(stepsPerSection*i)]
-          hmsection = 1
-          counter = 1
-        } else if (counter < 2 && hmsection == 1) {
-          heatmapdata[hmsection,(1 + (block-1)*stepsPerSection):(block*stepsPerSection)] = x_vector[(1 + stepsPerSection*(i-1)):(stepsPerSection*i)]
-          counter = counter + 1
-        } else if (counter < 2 && hmsection == 3) {
-          heatmapdata[hmsection,(1 + (block-1)*stepsPerSection):(block*stepsPerSection)] = x_vector[(1 + stepsPerSection*(i-1)):(stepsPerSection*i)]
-          counter = counter + 1
-        }
-
-      }
-      
-      heatmapdata <<- heatmapdata # save as global variable for debugging
-      
-      # Create border lines for tubes in heatmap
-      tubelines = list(
-        list(type = 'line', xref = "x", yref = "y",
-             x0 = -0.5, x1 = sections*stepsPerSection-0.5,
-             y0 = 1.5, y1 = 1.5,
-             line = list(color = "black", width = 10)
-        ),
-        list(type = 'line', xref = "x", yref = "y",
-             x0 = -0.5, x1 = sections*stepsPerSection-0.5,
-             y0 = 0.5, y1 = 0.5,
-             line = list(color = "black", width = 10)
-        )
-      )
-      
-      # Create lines for baffles in heatmap
-      baffleline = list(
-        type = "line",
-        line = list(color = "black", width = 10),
-        xref = "x",
-        yref = "y"
-      )
-      
-      # Store all line objects in one variable
-      lines = list()
-      for (i in 1:(sections-1)) {
-        baffleline[["x0"]] = i*stepsPerSection-0.5
-        baffleline[["x1"]] = i*stepsPerSection-0.5
-        if ((i %% 2) == 0) {
-          baffleline[c("y0", "y1")] = c(0,2.5)
-        } else {
-          baffleline[c("y0", "y1")] = c(-0.5,2)
-        }
-        lines = c(lines, list(baffleline))
-      }
-      
-      lines = c(lines,tubelines)
-      
-      # Create plot and output
-      output$plot1 = renderPlotly({
-        plot_ly(z = heatmapdata, type = "heatmap", hoverinfo = 'text', 
-                text = list(paste(round(heatmapdata[1,1:(sections*stepsPerSection)],digits = 2), "K", sep = " "),
-                            paste(round(heatmapdata[2,1:(sections*stepsPerSection)],digits = 2), "K", sep = " "),
-                            paste(round(heatmapdata[3,1:(sections*stepsPerSection)],digits = 2), "K", sep = " ")
-                ),
-                colorscale = "RdBu", 
-                colorbar = list(len = 1, title = list(text = "Temperature (K)",side = "right"))) %>%
-          config(displayModeBar = F) %>%
-          layout(
-            shapes = lines,
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            xaxis = list(
-              ticks = "",
-              showticklabels = F,
-              showgrid = F,
-              zeroline = F,
-              fixedrange = T
-            ),
-            yaxis = list(
-              ticks = "",
-              showticklabels = F,
-              showgrid = F,
-              zeroline = F,
-              fixedrange = T
-            )
-          )
-        
-        })
-      })
-      
+    # # Double-pipe with baffles --------------------------------------------------------------------------------------------  
+    # } else if (input$baffles > 0 && length(Ntubes_row)  1) {withProgress(value = 0.5, message = "Calculation in progress...",{
+    #   
+    #   
+    #   # Cross sectional area of the tube (m2)
+    #   CSA_t = pi/4*(input$tid^2)
+    #   
+    #   # Hydraulic diameter shell/pipe
+    #   dht = input$tid
+    #   
+    #   # Number of sections seperated b baffles
+    #   sections = input$baffles + 1
+    #   
+    #   # Number of model steps per section
+    #   stepsPerSection = ceiling(input$modelsteps/sections)
+    #   
+    #   # Inital temperature estimate vector
+    #   Temp <<- c(rep(input$Tsi,times = 2*sections*stepsPerSection),
+    #              rep(input$Tti,times = sections*stepsPerSection),
+    #              rep(mean(c(input$Tti,input$Tsi)),times = sections*stepsPerSection))
+    #   
+    #   # Create matrix containing all calclated temp values
+    #   T_matrix = matrix(data = 0, ncol = stepsPerSection*sections*4,nrow = stepsPerSection*sections*4)
+    #   
+    #   # Initial values + averaging for next section
+    #   for (i in seq(1,sections*stepsPerSection*2,by = stepsPerSection*2)) {
+    #     
+    #     T_matrix[i:(stepsPerSection+i-1),i:(stepsPerSection+i-1)] = diag(stepsPerSection)
+    #     
+    #   }
+    #   for (i in seq(1+stepsPerSection*2,sections*stepsPerSection*2,by = stepsPerSection*2)) {
+    #     
+    #     T_matrix[i:(stepsPerSection+i-1),(i-stepsPerSection):(i-1)] = matrix(data = -1/stepsPerSection,ncol = stepsPerSection, nrow = stepsPerSection)
+    #     
+    #   }
+    #   
+    #   # Right hand side solution to matrix equation
+    #   rhs_vector = rep(0, stepsPerSection*sections*4)
+    #   rhs_vector[1:stepsPerSection] = input$Tsi
+    #   
+    #   # Matrix coefficients
+    #   shellCoefficient1 = 1 - input$hs*SA_ot/(sections*2*input$Fs*input$Cps)
+    #   shellCoefficient2 = -1 - input$hs*SA_ot/(sections*2*input$Fs*input$Cps)
+    #   shellCoefficient3 = input$hs*SA_ot/(sections*input$Fs*input$Cps)
+    #   tubeCoefficient1 = -1
+    #   tubeCoefficient2 = 1 - input$ht*SA_it/(sections*stepsPerSection*input$Ft*input$Cpt)
+    #   tubeCoefficient3 = input$ht*SA_it/(sections*stepsPerSection*input$Ft*input$Cpt)
+    #   wallCoefficient1 = input$hs*SA_ot/(2*(input$hs*SA_ot + input$ht*SA_it))
+    #   wallCoefficient2 = wallCoefficient1
+    #   wallCoefficient3 = input$ht*SA_it/(input$hs*SA_ot + input$ht*SA_it)
+    #   wallCoefficient4 = -1
+    #   
+    #   # Shell top and bottom for the shell equation
+    #   for (i in seq(1+stepsPerSection,sections*stepsPerSection*2,by = stepsPerSection*2)) {
+    #     
+    #     T_matrix[i:(stepsPerSection+i-1),i:(stepsPerSection+i-1)] = diag(stepsPerSection)*shellCoefficient2
+    #     T_matrix[i:(stepsPerSection+i-1),(i-stepsPerSection):(i-1)] = diag(stepsPerSection)*shellCoefficient1
+    #     
+    #   }
+    #   
+    #   # Wall part for the shell equation
+    #   for (i in seq(1+stepsPerSection,sections*stepsPerSection*2,by = stepsPerSection*2)) {
+    #     j = stepsPerSection*sections*3+1 + (i-stepsPerSection-1)/2
+    #     T_matrix[i:(stepsPerSection+i-1),j:(j+stepsPerSection-1)] = diag(stepsPerSection)*shellCoefficient3
+    #   }
+    #   
+    #   # Tube section of matrix
+    #   for (i in seq(1+stepsPerSection*sections*2,stepsPerSection*sections*3-1)) {
+    #     T_matrix[i,i] = tubeCoefficient1
+    #     T_matrix[i,i+1] = tubeCoefficient2
+    #   }
+    #   
+    #   # Wall part of tube equation
+    #   for (i in seq(2+stepsPerSection*sections*3,stepsPerSection*sections*4)) {
+    #     T_matrix[i-stepsPerSection*sections-1,i] = tubeCoefficient3
+    #   }
+    #   
+    #   # Known inlet tube stuff for matrix
+    #   T_matrix[stepsPerSection*sections*3,stepsPerSection*sections*3] = 1
+    #   rhs_vector[stepsPerSection*sections*3] = input$Tti
+    #   
+    #   #
+    #   for (i in seq(1, stepsPerSection*sections,by = stepsPerSection)) {
+    #     rows = (i+stepsPerSection*sections*3):(i+stepsPerSection*sections*3+stepsPerSection-1)
+    #     col1 = (2*i-1):(2*i+stepsPerSection-2)
+    #     col2 = (2*i+stepsPerSection-1):(2*i+stepsPerSection*2-2)
+    #     col3 = rows - stepsPerSection*sections
+    #     
+    #     T_matrix[rows,col1] = diag(stepsPerSection)*wallCoefficient1
+    #     T_matrix[rows,col2] = diag(stepsPerSection)*wallCoefficient2
+    #     T_matrix[rows,col3] = diag(stepsPerSection)*wallCoefficient3
+    #     T_matrix[rows,rows] = diag(stepsPerSection)*wallCoefficient4
+    #     
+    #   }
+    #   
+    #   # Solve matrix problem using LU decomposition
+    #   x_vector <<- lusys(T_matrix,rhs_vector)
+    #   
+    # 
+    #   # Initialize heatmap data matrix without baffle columns
+    #   heatmapdata = matrix(ncol = stepsPerSection*sections, nrow = 2)
+    #   
+    #   # Insert tube temperatures
+    #   heatmapdata[2,] = x_vector[(stepsPerSection*sections*2 + 1):(stepsPerSection*sections*3)]
+    #   
+    #   # Insert shell temperatures
+    #   hmsection = 1
+    #   counter = 2
+    #   for (i in 1:(sections*2)) {
+    # 
+    #     block = ceiling(i/2)
+    #     if (counter == 2 && hmsection == 1) {
+    #       heatmapdata[hmsection,(1 + (block-1)*stepsPerSection):(block*stepsPerSection)] = x_vector[(1 + stepsPerSection*(i-1)):(stepsPerSection*i)]
+    #       hmsection = 3
+    #       counter = 1
+    #     } else if (counter == 2 && hmsection == 3) {
+    #       heatmapdata[hmsection,(1 + (block-1)*stepsPerSection):(block*stepsPerSection)] = x_vector[(1 + stepsPerSection*(i-1)):(stepsPerSection*i)]
+    #       hmsection = 1
+    #       counter = 1
+    #     } else if (counter < 2 && hmsection == 1) {
+    #       heatmapdata[hmsection,(1 + (block-1)*stepsPerSection):(block*stepsPerSection)] = x_vector[(1 + stepsPerSection*(i-1)):(stepsPerSection*i)]
+    #       counter = counter + 1
+    #     } else if (counter < 2 && hmsection == 3) {
+    #       heatmapdata[hmsection,(1 + (block-1)*stepsPerSection):(block*stepsPerSection)] = x_vector[(1 + stepsPerSection*(i-1)):(stepsPerSection*i)]
+    #       counter = counter + 1
+    #     }
+    # 
+    #   }
+    #   
+    #   heatmapdata <<- heatmapdata # save as global variable for debugging
+    #   
+    #   # Create border lines for tubes in heatmap
+    #   tubelines = list(
+    #     list(type = 'line', xref = "x", yref = "y",
+    #          x0 = -0.5, x1 = sections*stepsPerSection-0.5,
+    #          y0 = 1.5, y1 = 1.5,
+    #          line = list(color = "black", width = 10)
+    #     ),
+    #     list(type = 'line', xref = "x", yref = "y",
+    #          x0 = -0.5, x1 = sections*stepsPerSection-0.5,
+    #          y0 = 0.5, y1 = 0.5,
+    #          line = list(color = "black", width = 10)
+    #     )
+    #   )
+    #   
+    #   # Create lines for baffles in heatmap
+    #   baffleline = list(
+    #     type = "line",
+    #     line = list(color = "black", width = 10),
+    #     xref = "x",
+    #     yref = "y"
+    #   )
+    #   
+    #   # Store all line objects in one variable
+    #   lines = list()
+    #   for (i in 1:(sections-1)) {
+    #     baffleline[["x0"]] = i*stepsPerSection-0.5
+    #     baffleline[["x1"]] = i*stepsPerSection-0.5
+    #     if ((i %% 2) == 0) {
+    #       baffleline[c("y0", "y1")] = c(0,2.5)
+    #     } else {
+    #       baffleline[c("y0", "y1")] = c(-0.5,2)
+    #     }
+    #     lines = c(lines, list(baffleline))
+    #   }
+    #   
+    #   lines = c(lines,tubelines)
+    #   
+    #   # Create plot and output
+    #   output$plot1 = renderPlotly({
+    #     plot_ly(z = heatmapdata, type = "heatmap", hoverinfo = 'text', 
+    #             text = list(paste(round(heatmapdata[1,1:(sections*stepsPerSection)],digits = 2), "K", sep = " "),
+    #                         paste(round(heatmapdata[2,1:(sections*stepsPerSection)],digits = 2), "K", sep = " "),
+    #                         paste(round(heatmapdata[3,1:(sections*stepsPerSection)],digits = 2), "K", sep = " ")
+    #             ),
+    #             colorscale = "RdBu", 
+    #             colorbar = list(len = 1, title = list(text = "Temperature (K)",side = "right"))) %>%
+    #       config(displayModeBar = F) %>%
+    #       layout(
+    #         shapes = lines,
+    #         paper_bgcolor='rgba(0,0,0,0)',
+    #         plot_bgcolor='rgba(0,0,0,0)',
+    #         xaxis = list(
+    #           ticks = "",
+    #           showticklabels = F,
+    #           showgrid = F,
+    #           zeroline = F,
+    #           fixedrange = T
+    #         ),
+    #         yaxis = list(
+    #           ticks = "",
+    #           showticklabels = F,
+    #           showgrid = F,
+    #           zeroline = F,
+    #           fixedrange = T
+    #         )
+    #       )
+    #     
+    #     })
+    #   })
+    #   
     # Shell and tube with baffles --------------------------------------------------------------------------
-    } else if (input$baffles > 0 && length(Ntubes_row) > 1) {withProgress(value = 0.5, message = "Calculation in progress...",{
+    } else if (input$baffles > 0) {withProgress(value = 0.5, message = "Calculation in progress...",{
       
       # Number of sections seperated by baffles
       sections = input$baffles + 1
@@ -437,8 +437,9 @@ server = function(input,output,session){
       Temp <<- c(rep(input$Tsi,times = (nrows+1)*sections*stepsPerSection),
                  rep(input$Tti,times = nrows*sections*stepsPerSection),
                  rep(mean(c(input$Tti,input$Tsi)),times = nrows*sections*stepsPerSection))
+      
       err = 1
-      #while (err > 0.001) { 
+      while (err > 0.001) { 
         # Create matrix containing all calclated temp values
         T_matrix = matrix(data = 0, ncol = stepsPerSection*sections*(3*nrows+1),nrow = stepsPerSection*sections*(3*nrows+1))
         
@@ -524,37 +525,42 @@ server = function(input,output,session){
           return(Nuss)
         } 
         
-        # Configuration if statement
-        if (input$config == "square") {
-          
-          # Reynolds if statement
-          if (mean(Re_s) < 100) {
-            Nu_s = Nuss_func(0.8,0.4)
-          } else if (mean(Re_s) < 1000) {
-            Nu_s = 0.3 + (0.62*(Re_d^0.5)*Pr_s^(1/3))/((1+(0.4/Pr_s)^(2/3))^0.25)*((1+(Re_d/282000)^0.625)^(0.8))
-          } else if (mean(Re_s) < 200000) {
-            Nu_s = Nuss_func(0.27,0.63)
-          } else {
-            Nu_s = Nuss_func(0.021,0.84)
-          }
-          
+        # Double pipe vs shell and tube if statement
+        if (sum(Ntubes_row) == 1) {
+          Nu_s = 0.3 + (0.62*(Re_d^0.5)*Pr_s^(1/3))/((1+(0.4/Pr_s)^(2/3))^0.25)*((1+(Re_d/282000)^0.625)^(0.8))
         } else {
-          if (mean(Re_s) < 100) {
-            Nu_s = Nuss_func(0.9,0.4)
-          } else if (mean(Re_s) < 1000) {
-            Nu_s = 0.3 + (0.62*(Re_d^0.5)*Pr_s^(1/3))/((1+(0.4/Pr_s)^(2/3))^0.25)*((1+(Re_d/282000)^0.625)^(0.8))
-          } else if (mean(Re_s) < 200000) {
-            # Pitch if statement
-            if (pitch_x/pitch_y < 2) {
-              Nu_s = Nuss_func(0.35*(pitch_x/pitch_y)^0.2,0.6)
+          # Configuration if statement
+          if (input$config == "square") {
+            
+            # Reynolds if statement
+            if (mean(Re_s) < 100) {
+              Nu_s = Nuss_func(0.8,0.4)
+            } else if (mean(Re_s) < 1000) {
+              Nu_s = 0.3 + (0.62*(Re_d^0.5)*Pr_s^(1/3))/((1+(0.4/Pr_s)^(2/3))^0.25)*((1+(Re_d/282000)^0.625)^(0.8))
+            } else if (mean(Re_s) < 200000) {
+              Nu_s = Nuss_func(0.27,0.63)
             } else {
-              Nu_s = Nuss_func(0.4,0.6)
+              Nu_s = Nuss_func(0.021,0.84)
             }
+            
           } else {
-            Nu_s = Nuss_func(0.022,0.84)
+            if (mean(Re_s) < 100) {
+              Nu_s = Nuss_func(0.9,0.4)
+            } else if (mean(Re_s) < 1000) {
+              Nu_s = 0.3 + (0.62*(Re_d^0.5)*Pr_s^(1/3))/((1+(0.4/Pr_s)^(2/3))^0.25)*((1+(Re_d/282000)^0.625)^(0.8))
+            } else if (mean(Re_s) < 200000) {
+              # Pitch if statement
+              if (pitch_x/pitch_y < 2) {
+                Nu_s = Nuss_func(0.35*(pitch_x/pitch_y)^0.2,0.6)
+              } else {
+                Nu_s = Nuss_func(0.4,0.6)
+              }
+            } else {
+              Nu_s = Nuss_func(0.022,0.84)
+            }
           }
         }
-        
+          
         if (mean(Re_t) > 2100) {
           Nu_t <<- 0.027*Re_t^0.8*Pr_t^(1/3)*(Mu[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]/Mu[(stepsPerSection*sections*(2*nrows+1)+1):(stepsPerSection*sections*(3*nrows+1))])^0.14
         } else {
@@ -565,40 +571,49 @@ server = function(input,output,session){
         # Heat transfer coeffcient
         h_s <<- Nu_s*K[1:(stepsPerSection*sections*(nrows+1))]/dht
         h_t <<- Nu_t*K[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]/dht
-        
-        # Adjust h_s for number of tubes
-        CSA_s_vector = vector()
-        for (i in 1:length(CSA_s)) {
+
+        # Matrix coefficients
+        Tube_vector = vector()
+        for (i in 1:(nrows+1)) {
           for (j in 1:sections){
-            
             if (j %% 2 == 0){
-              CSA_s_vector[(1+stepsPerSection*(j-1) + (i-1)*stepsPerSection*sections):(j*stepsPerSection + (i-1)*stepsPerSection*sections)] = rev(CSA_s)[i]
+              Tube_vector[(1+stepsPerSection*(j-1) + (i-1)*stepsPerSection*sections):(j*stepsPerSection + (i-1)*stepsPerSection*sections)] = rev(c(Ntubes_row,NA))[i]
             } else {
-              CSA_s_vector[(1+stepsPerSection*(j-1) + (i-1)*stepsPerSection*sections):(j*stepsPerSection + (i-1)*stepsPerSection*sections)] = CSA_s[i]
+              Tube_vector[(1+stepsPerSection*(j-1) + (i-1)*stepsPerSection*sections):(j*stepsPerSection + (i-1)*stepsPerSection*sections)] = c(Ntubes_row,NA)[i]
             }
           }
         }
         
+        # Set up a new ht vector because stein said so (and to match hs)
+        h_t_extended = c(h_t, rep(NA,sections*stepsPerSection))
+        for (i in seq(2,sections, by = 2)) {
+          for (j in (nrows+1):1) {
+            if (j == 1){
+              h_t_extended[((j-1)*sections*stepsPerSection + (i-1)*stepsPerSection + 1):((j-1)*sections*stepsPerSection + (i)*stepsPerSection)] = NA
+            } else {
+              h_t_extended[((j-1)*sections*stepsPerSection + (i-1)*stepsPerSection + 1):((j-1)*sections*stepsPerSection + (i)*stepsPerSection)] = 
+                h_t[((j-2)*sections*stepsPerSection + (i-1)*stepsPerSection + 1):((j-2)*sections*stepsPerSection + (i)*stepsPerSection)]
+            }
+          }
+        }
         
-        
-        # Matrix coefficients
-        shellCoefficient1 = 1 - h_s*SA_ot/(sections*2*input$Fs*input$Cps)
-        shellCoefficient2 = -1 - h_s*SA_ot/(sections*2*input$Fs*input$Cps)
-        shellCoefficient3 = h_s*SA_ot/(sections*input$Fs*input$Cps)
+        shellCoefficient1 = 1 - h_s*Tube_vector*SA_ot/(sections*2*input$Fs*Cp[1:(stepsPerSection*sections*(nrows+1))])
+        shellCoefficient2 = -1 - h_s*Tube_vector*SA_ot/(sections*2*input$Fs*Cp[1:(stepsPerSection*sections*(nrows+1))])
+        shellCoefficient3 = h_s*Tube_vector*SA_ot/(sections*input$Fs*Cp[1:(stepsPerSection*sections*(nrows+1))])
         tubeCoefficient1 = -1
-        tubeCoefficient2 = 1 - h_t*SA_it/(sections*stepsPerSection*input$Ft*input$Cpt)
-        tubeCoefficient3 = h_t*SA_it/(sections*stepsPerSection*input$Ft*input$Cpt)
-        wallCoefficient1 = h_s*SA_ot/(2*(h_s*SA_ot + h_t*SA_it))
+        tubeCoefficient2 = 1 - h_t*sum(Ntubes_row)*SA_it/(sections*stepsPerSection*input$Ft*Cp[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))])
+        tubeCoefficient3 = h_t*sum(Ntubes_row)*SA_it/(sections*stepsPerSection*input$Ft*Cp[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))])
+        wallCoefficient1 <<- h_s*SA_ot/(2*(h_s*SA_ot + h_t_extended*SA_it))
         wallCoefficient2 = wallCoefficient1
-        wallCoefficient3 = h_t*SA_it/(h_s*SA_ot + h_t*SA_it)
+        wallCoefficient3 <<- h_t_extended*SA_it/(h_s*SA_ot + h_t_extended*SA_it)
         wallCoefficient4 = -1
         
         # Shell for the shell equation (downward flow)
         for (i in seq(1+stepsPerSection*sections,sections*stepsPerSection*2,by = stepsPerSection*2)) {
           for (j in seq(0,(length(Ntubes_row)-1)*sections*stepsPerSection,by = sections*stepsPerSection)) {
             
-            T_matrix[(i+j):(stepsPerSection+i+j-1),(i+j):(stepsPerSection+i+j-1)] = diag(stepsPerSection)*shellCoefficient2
-            T_matrix[(i+j):(stepsPerSection+i+j-1),(i+j-sections*stepsPerSection):(i+j-sections*stepsPerSection+stepsPerSection-1)] = diag(stepsPerSection)*shellCoefficient1
+            T_matrix[(i+j):(stepsPerSection+i+j-1),(i+j):(stepsPerSection+i+j-1)] = diag(stepsPerSection)*shellCoefficient2[(i+j-sections*stepsPerSection):(stepsPerSection+i+j-1-sections*stepsPerSection)]
+            T_matrix[(i+j):(stepsPerSection+i+j-1),(i+j-sections*stepsPerSection):(i+j-sections*stepsPerSection+stepsPerSection-1)] = diag(stepsPerSection)*shellCoefficient1[(i+j-sections*stepsPerSection):(stepsPerSection+i+j-1-sections*stepsPerSection)]
           }
         }
         
@@ -606,32 +621,33 @@ server = function(input,output,session){
         for (i in seq(1+stepsPerSection,sections*stepsPerSection,by = stepsPerSection*2)) {
           for (j in seq(0,(length(Ntubes_row)-1)*sections*stepsPerSection,by = sections*stepsPerSection)) {
             
-            T_matrix[(i+j):(stepsPerSection+i+j-1),(i+j):(stepsPerSection+i+j-1)] = diag(stepsPerSection)*shellCoefficient2
-            T_matrix[(i+j):(stepsPerSection+i+j-1),(i+j+sections*stepsPerSection):(i+j+sections*stepsPerSection+stepsPerSection-1)] = diag(stepsPerSection)*shellCoefficient1
+            T_matrix[(i+j):(stepsPerSection+i+j-1),(i+j):(stepsPerSection+i+j-1)] = diag(stepsPerSection)*shellCoefficient2[(i+j+sections*stepsPerSection):(stepsPerSection+i+j-1+sections*stepsPerSection)]
+            T_matrix[(i+j):(stepsPerSection+i+j-1),(i+j+sections*stepsPerSection):(i+j+sections*stepsPerSection+stepsPerSection-1)] = diag(stepsPerSection)*shellCoefficient1[(i+j+sections*stepsPerSection):(stepsPerSection+i+j-1+sections*stepsPerSection)]
           }
         }
         
-        # Wall part for the shell equation
+        # Wall part for the shell equation (downward flow)
         for (i in seq(1+stepsPerSection*sections,sections*stepsPerSection*2,by = stepsPerSection*2)) {
           for (j in seq(0,(length(Ntubes_row)-1)*sections*stepsPerSection,by = sections*stepsPerSection)) {
             
-            T_matrix[(i+j):(stepsPerSection+i+j-1),(sections*stepsPerSection*2*length(Ntubes_row)+i+j):(sections*stepsPerSection*2*length(Ntubes_row)+i+j+stepsPerSection-1)] = diag(stepsPerSection)*shellCoefficient3
+            T_matrix[(i+j):(stepsPerSection+i+j-1),(sections*stepsPerSection*2*length(Ntubes_row)+i+j):(sections*stepsPerSection*2*length(Ntubes_row)+i+j+stepsPerSection-1)] = diag(stepsPerSection)*shellCoefficient3[(i+j-sections*stepsPerSection):(stepsPerSection+i+j-1-sections*stepsPerSection)]
           }
         }
         
+        # Wall part for the shell equation (upward flow)
         for (i in seq(1+stepsPerSection,sections*stepsPerSection,by = stepsPerSection*2)) {
           for (j in seq(0,(length(Ntubes_row)-1)*sections*stepsPerSection,by = sections*stepsPerSection)) {
             
-            T_matrix[(i+j):(stepsPerSection+i+j-1),(sections*stepsPerSection*(2*length(Ntubes_row)+1)+i+j):(sections*stepsPerSection*(2*length(Ntubes_row)+1)+i+j+stepsPerSection-1)] = diag(stepsPerSection)*shellCoefficient3  
+            T_matrix[(i+j):(stepsPerSection+i+j-1),(sections*stepsPerSection*(2*length(Ntubes_row)+1)+i+j):(sections*stepsPerSection*(2*length(Ntubes_row)+1)+i+j+stepsPerSection-1)] = diag(stepsPerSection)*shellCoefficient3[(i+j+sections*stepsPerSection):(stepsPerSection+i+j-1+sections*stepsPerSection)]  
           }
         }
         
         # Tube section of matrix
-        for (i in seq(1+stepsPerSection*sections*(length(Ntubes_row)+1),stepsPerSection*sections*(length(Ntubes_row)+2)-1)) {
-          for (j in seq(0,(length(Ntubes_row)-1)*sections*stepsPerSection,by = sections*stepsPerSection)) {
+        for (i in seq(1+stepsPerSection*sections*(nrows+1),stepsPerSection*sections*(nrows+2)-1)) {
+          for (j in seq(0,(nrows-1)*sections*stepsPerSection,by = sections*stepsPerSection)) {
             T_matrix[(i+j),(i+j)] = tubeCoefficient1
-            T_matrix[(i+j),(i+j+1)] = tubeCoefficient2
-            T_matrix[(i+j),(i+j+1+length(Ntubes_row)*sections*stepsPerSection)] = tubeCoefficient3
+            T_matrix[(i+j),(i+j+1)] = tubeCoefficient2[(i+j-sections*stepsPerSection*(nrows+1))]
+            T_matrix[(i+j),(i+j+1+nrows*sections*stepsPerSection)] = tubeCoefficient3[(i+j-sections*stepsPerSection*(nrows+1))]
           }
         }
         
@@ -640,19 +656,59 @@ server = function(input,output,session){
           T_matrix[i,i] = 1
           rhs_vector[i] = input$Tti
         }
-        
-        # Wall section of matrix
-        for (i in seq((2*length(Ntubes_row)+1)*stepsPerSection*sections+1, (3*length(Ntubes_row)+1)*stepsPerSection*sections,by = 1)) {
-          T_matrix[i,(i-(2*length(Ntubes_row)+1)*stepsPerSection*sections)] = wallCoefficient1
-          T_matrix[i,(i-2*length(Ntubes_row)*stepsPerSection*sections)] = wallCoefficient2
-          T_matrix[i,(i-length(Ntubes_row)*stepsPerSection*sections)] = wallCoefficient3
-          T_matrix[i,i] = wallCoefficient4
+   
+        # Wall for the wall equation (downward flow)
+        for (i in seq(1+stepsPerSection*sections*(2*nrows+1),sections*stepsPerSection*(2*nrows+2),by = stepsPerSection*2)) {
+          for (j in seq(0,(nrows-1)*sections*stepsPerSection,by = sections*stepsPerSection)) {
+            
+            T_matrix[(i+j):(stepsPerSection+i+j-1),(i+j-stepsPerSection*sections*(2*nrows+1)):(stepsPerSection+i+j-1-stepsPerSection*sections*(2*nrows+1))] = 
+              diag(stepsPerSection)*wallCoefficient1[(i+j-stepsPerSection*sections*(2*nrows+1)):(stepsPerSection+i+j-1-stepsPerSection*sections*(2*nrows+1))]
+            
+            T_matrix[(i+j):(stepsPerSection+i+j-1),(i+j-stepsPerSection*sections*(2*nrows)):(stepsPerSection+i+j-1-stepsPerSection*sections*(2*nrows))] = 
+              diag(stepsPerSection)*wallCoefficient2[(i+j-stepsPerSection*sections*(2*nrows+1)):(stepsPerSection+i+j-1-stepsPerSection*sections*(2*nrows+1))]
+            
+            T_matrix[(i+j):(stepsPerSection+i+j-1),(i+j-stepsPerSection*sections*(nrows)):(stepsPerSection+i+j-1-stepsPerSection*sections*(nrows))] = 
+              diag(stepsPerSection)*wallCoefficient3[(i+j-stepsPerSection*sections*(2*nrows+1)):(stepsPerSection+i+j-1-stepsPerSection*sections*(2*nrows+1))]
+            
+            T_matrix[(i+j):(stepsPerSection+i+j-1),(i+j):(stepsPerSection+i+j-1)] = 
+              diag(stepsPerSection)*wallCoefficient4
+            
+          }
         }
+        T_matrix <<- T_matrix
+        
+        # Wall for the wall equation (upward flow)
+        for (i in seq(1+stepsPerSection*sections*(2*nrows+1)+stepsPerSection,sections*stepsPerSection*(2*nrows+2),by = stepsPerSection*2)) {
+          for (j in seq(0,(nrows-1)*sections*stepsPerSection,by = sections*stepsPerSection)) {
+            
+            T_matrix[(i+j):(stepsPerSection+i+j-1),(i+j-stepsPerSection*sections*(2*nrows+1)):(stepsPerSection+i+j-1-stepsPerSection*sections*(2*nrows+1))] = 
+              diag(stepsPerSection)*wallCoefficient1[(i+j-stepsPerSection*sections*(2*nrows)):(stepsPerSection+i+j-1-stepsPerSection*sections*(2*nrows))]
+            
+            T_matrix[(i+j):(stepsPerSection+i+j-1),(i+j-stepsPerSection*sections*(2*nrows)):(stepsPerSection+i+j-1-stepsPerSection*sections*(2*nrows))] = 
+              diag(stepsPerSection)*wallCoefficient2[(i+j-stepsPerSection*sections*(2*nrows)):(stepsPerSection+i+j-1-stepsPerSection*sections*(2*nrows))]
+            
+            T_matrix[(i+j):(stepsPerSection+i+j-1),(i+j-stepsPerSection*sections*(nrows)):(stepsPerSection+i+j-1-stepsPerSection*sections*(nrows))] = 
+              diag(stepsPerSection)*wallCoefficient3[(i+j-stepsPerSection*sections*(2*nrows)):(stepsPerSection+i+j-1-stepsPerSection*sections*(2*nrows))]
+            
+            T_matrix[(i+j):(stepsPerSection+i+j-1),(i+j):(stepsPerSection+i+j-1)] = 
+              diag(stepsPerSection)*wallCoefficient4
+            
+          }
+        }
+        
+        
+        
+        
+        
+        T_matrix <<- T_matrix
+        rhs_vector <<- rhs_vector
         
         # Solve matrix problem using LU decomposition
         x_vector <<- lusys(T_matrix,rhs_vector)
-        
-      #}
+        err = sqrt(mean(((x_vector - Temp)/Temp)^2))
+        Temp = x_vector
+        print(err)
+      }
       
       
       # Initialize heatmap data matrix without baffle columns

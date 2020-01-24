@@ -31,11 +31,11 @@ ui = fluidPage(title = "HX Modelling", shinyjs::useShinyjs(),
                       radioButtons("config", label = HTML("Tube configuration"),
                                    choices = list("In-line" = "square", "Staggered" = "triangle"), 
                                    selected = "square"),
-                      textInput("ntubesrow", HTML("Number of Tubes Per Row"),"", placeholder = "1,3,5,3,1")
+                      textInput("ntubesrow", HTML("Number of Tubes Per Row"),"1,3,1", placeholder = "1,3,5,3,1")
                ),
                column(4, align = "left",
-                      numericInput("modelsteps", HTML("# of Model Steps"),"", value = 100),
-                      numericInput("baffles", HTML("# of Baffles"),"",value = 4)
+                      numericInput("modelsteps", HTML("# of Model Steps"),"", value = 20),
+                      numericInput("baffles", HTML("# of Baffles"),"",value = 3)
                )
              ),
              fluidRow(
