@@ -15,10 +15,10 @@ ui = fluidPage(title = "HX Modelling", shinyjs::useShinyjs(),
                       numericInput("Ft", HTML("Tube Flowrate (kg/s)"),"", value = 0.0265),
                       numericInput("Tsi", HTML("Inlet Shell Temperature (K)"),"", value = 322.3),
                       numericInput("Tti", HTML("Inlet Tube Temperature (K)"),"", value = 283.4),
-                      numericInput("Cps", HTML("Shell Heat Capacity (J/(kg K)"),"", value = 4184),
-                      numericInput("Cpt", HTML("Tube Heat Capacity (J/(kg K)"),"",value = 4184),
-                      numericInput("hs", HTML("Shell Heat Transfer Coefficient (W/(m<sup>2</sup> K)"),"", value = 1000),
-                      numericInput("ht", HTML("Tube Heat Transfer Coefficient (W/(m<sup>2</sup> K)"),"", value = 1000)
+                      #numericInput("Cps", HTML("Shell Heat Capacity (J/(kg K)"),"", value = 4184),
+                      #numericInput("Cpt", HTML("Tube Heat Capacity (J/(kg K)"),"",value = 4184),
+                      #numericInput("hs", HTML("Shell Heat Transfer Coefficient (W/(m<sup>2</sup> K)"),"", value = 1000),
+                      #numericInput("ht", HTML("Tube Heat Transfer Coefficient (W/(m<sup>2</sup> K)"),"", value = 1000)
 
                ),
                column(4, align = "center",
