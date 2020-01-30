@@ -44,26 +44,26 @@ server = function(input,output,session){
     }
     
     # Vapour water properties
-    dens_vw = function(x) {
+    hvap_vw = function(x) {
       Tau = 1 - x/647.096
-      y = 17.863 + 58.606*Tau^0.35 - 95.396*Tau^(2/3) + 213.89*Tau - 141.26*Tau^(4/3) # mol/dm^3
-      y = y*18.015 # kg/m3
+      y = 5.2053*10^7*(1-Tau)^(0.3199 - 0.212*Tau + 0.25795*Tau^2) # J/kmol
+      y = y/18.015 # J/kg
       return(y)
     }
     
     cp_vw = function(x) {
-      y = 276370 - 2090.1*x + 8.125*x^2 - 0.014116*x^3 + 9.3701*10^(-6)*x^4 # J/(kmol K)
+      y = 0.33363*10^5 + 0.2697*10^5*((2.6105*10^3/x)/(sinh((2.6105*10^3)/x)))^2 + 0.08896*10^5*((1169/x)/(sinh((1169)/x)))^2 # J/(kmol K)
       y = y/18.015 # J/(kg K)
       return(y)
     }
     
     mu_vw = function(x) {
-      y = exp(-52.843 + 3703.6/x + 5.866*log(x) -5.879*10^(-29)*T^10) # Pa s
+      y = 1.7096*10^-8*x^1.1146 # Pa s
       return(y)
     }
     
     k_vw = function(x) {
-      y = -0.432 + 0.0057255*x - 0.000008078*x^2 + 1.861*10^(-9)*x^3 # W/(m K)
+      y = 6.2041*10^-6*x^1.3973 # W/m K
       return(y)
     }
     
@@ -220,7 +220,7 @@ server = function(input,output,session){
       })
     })
     # Shell and tube with baffles --------------------------------------------------------------------------------------------  
-    } else if (input$baffles > 0) {withProgress(value = 0.5, message = "Calculation in progress...",{
+    } else if (input$baffles > 24) {withProgress(value = 0.5, message = "Calculation in progress...",{
       
       # Number of sections seperated by baffles
       sections = input$baffles + 1
@@ -632,7 +632,7 @@ server = function(input,output,session){
       stepsPerSection = ceiling(input$modelsteps/sections)
       
       # Cross sectional area of the tube (m2)
-      CSA_t <<- pi/4*(input$tid^2)
+      CSA_t = pi/4*(input$tid^2)
       
       # Hydraulic diameter pipe
       dht = input$tid
@@ -661,12 +661,22 @@ server = function(input,output,session){
       nrows = length(Ntubes_row)
       
       # Inital temperature estimate vector
-      Temp <<- c(rep(input$Tsi,times = (nrows+1)*sections*stepsPerSection),
+      Temp = c(rep(input$Tsi,times = (nrows+1)*sections*stepsPerSection),
                  rep(input$Tti,times = nrows*sections*stepsPerSection),
                  rep(mean(c(input$Tti,input$Tsi)),times = nrows*sections*stepsPerSection))
       
+      # Create mass flowrate vector
+      Fs = rep(input$Fs,stepsPerSection*sections*(nrows+1))
+      
+      # Create condensed mass vector
+      Mcond = rep(0,stepsPerSection*sections*(nrows+1))
+      
+      # Create RH vector
+      RH = rep(input$RH,stepsPerSection*sections*(nrows+1))
+      
+      
       err = 1
-      while (err > 0.001) { 
+      while (err > 0.01) { 
         # Create matrix containing all calclated temp values
         T_matrix = matrix(data = 0, ncol = stepsPerSection*sections*(3*nrows+1),nrow = stepsPerSection*sections*(3*nrows+1))
         
@@ -702,14 +712,31 @@ server = function(input,output,session){
           rhs_vector[i] = input$Tti
         }
         
+        Tcond = 1730.63/(8.07131-log10(input$P/101325*760)) - 233.426 + 273.15
+        for (i in 1:(stepsPerSection*sections*(nrows+1))) {
+          if (Temp[i] < Tcond && input$fluid == "vw") {
+            Temp[i] = Tcond
+          }
+        }
+        
+        
         # Properties
-        Dens <<- dens_lw(Temp)
-        Cp <<- cp_lw(Temp)
-        Mu <<- mu_lw(Temp)
-        K <<- k_lw(Temp)
+        Dens = dens_lw(Temp)
+        Cp = cp_lw(Temp)
+        Mu = mu_lw(Temp)
+        K = k_lw(Temp)
+        
+       if (input$fluid == "vw") {
+          Dens[1:(stepsPerSection*sections*(nrows+1))] = input$P*18.015/(8.314*Temp[1:(stepsPerSection*sections*(nrows+1))])/1000
+          Cp[1:(stepsPerSection*sections*(nrows+1))] = cp_vw(Temp[1:(stepsPerSection*sections*(nrows+1))])
+          Mu[1:(stepsPerSection*sections*(nrows+1))] = mu_vw(Temp[1:(stepsPerSection*sections*(nrows+1))])
+          K[1:(stepsPerSection*sections*(nrows+1))] = k_vw(Temp[1:(stepsPerSection*sections*(nrows+1))])
+          Hvap = hvap_vw(Temp[1:(stepsPerSection*sections*(nrows+1))])
+        }
+        
         
         # Reynolds #
-        vs = input$Fs/(Dens[1:(stepsPerSection*sections)]*CSA_s_vector)
+        vs = Fs/(Dens[1:(stepsPerSection*sections)]*CSA_s_vector)
         vt = input$Ft/(Dens[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]*CSA_t*sum(Ntubes_row))
         
         vs_max = vs*pitch_x/(pitch_x-(input$tid + 2*input$tt))
@@ -719,19 +746,19 @@ server = function(input,output,session){
           vs_max = pitch_x/2*vs/(pitch_diag - input$tid - 2*input$tt)
         } 
         
-        Re_s <<- Dens[1:(stepsPerSection*sections*(nrows+1))]*dht*vs_max/Mu[1:(stepsPerSection*sections*(nrows+1))]
-        Re_t <<- Dens[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]*dht*vt/Mu[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]
-        Re_d <<- Dens[1:(stepsPerSection*sections*(nrows+1))]*dht*vs/Mu[1:(stepsPerSection*sections*(nrows+1))]
+        Re_s = Dens[1:(stepsPerSection*sections*(nrows+1))]*dht*vs_max/Mu[1:(stepsPerSection*sections*(nrows+1))]
+        Re_t = Dens[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]*dht*vt/Mu[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]
+        Re_d = Dens[1:(stepsPerSection*sections*(nrows+1))]*dht*vs/Mu[1:(stepsPerSection*sections*(nrows+1))]
         
         
         # Prandtl #
-        Pr_s <<- Mu[1:(stepsPerSection*sections*(nrows+1))]*Cp[1:(stepsPerSection*sections*(nrows+1))]/K[1:(stepsPerSection*sections*(nrows+1))]
-        Pr_t <<- Mu[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]*Cp[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]/K[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]
-        Pr_w <<- Mu[(stepsPerSection*sections*(2*nrows+1)+1):(stepsPerSection*sections*(3*nrows+1))]*Cp[(stepsPerSection*sections*(2*nrows+1)+1):(stepsPerSection*sections*(3*nrows+1))]/K[(stepsPerSection*sections*(2*nrows+1)+1):(stepsPerSection*sections*(3*nrows+1))]
+        Pr_s = Mu[1:(stepsPerSection*sections*(nrows+1))]*Cp[1:(stepsPerSection*sections*(nrows+1))]/K[1:(stepsPerSection*sections*(nrows+1))]
+        Pr_t = Mu[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]*Cp[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]/K[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]
+        Pr_w = Mu[(stepsPerSection*sections*(2*nrows+1)+1):(stepsPerSection*sections*(3*nrows+1))]*Cp[(stepsPerSection*sections*(2*nrows+1)+1):(stepsPerSection*sections*(3*nrows+1))]/K[(stepsPerSection*sections*(2*nrows+1)+1):(stepsPerSection*sections*(3*nrows+1))]
         
         
         # Create Pr_w vector that matches the shell vector
-        Pr_w_aligned <<- vector(mode = "numeric",length = stepsPerSection*sections*(nrows+1)) - 999
+        Pr_w_aligned = vector(mode = "numeric",length = stepsPerSection*sections*(nrows+1)) - 999
         
         for (i in seq(1,stepsPerSection*sections*(nrows+1), by = 2*stepsPerSection)) {
           Pr_w_aligned[i:(i+stepsPerSection-1)] = Pr_w[i:(i+stepsPerSection-1)]
@@ -744,7 +771,7 @@ server = function(input,output,session){
         Pr_w_aligned[is.na(Pr_w_aligned)] = -999
         
         # Graetz #
-        Gz_t <<- dht/input$L*Re_t*Pr_t
+        Gz_t = dht/input$L*Re_t*Pr_t
         
         # Nusselt #
         Nuss_func = function(C,m) {
@@ -758,7 +785,7 @@ server = function(input,output,session){
         } else {
           # Configuration if statement
           if (input$config == "square") {
-            
+          
             # Reynolds if statement
             if (mean(Re_s) < 100) {
               Nu_s = Nuss_func(0.8,0.4)
@@ -789,15 +816,15 @@ server = function(input,output,session){
         }
         
         if (mean(Re_t) > 2100) {
-          Nu_t <<- 0.027*Re_t^0.8*Pr_t^(1/3)*(Mu[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]/Mu[(stepsPerSection*sections*(2*nrows+1)+1):(stepsPerSection*sections*(3*nrows+1))])^0.14
+          Nu_t = 0.027*Re_t^0.8*Pr_t^(1/3)*(Mu[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]/Mu[(stepsPerSection*sections*(2*nrows+1)+1):(stepsPerSection*sections*(3*nrows+1))])^0.14
         } else {
-          Nu_t <<- 1.86*Gz_t^(1/3)*(Mu[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]/Mu[(stepsPerSection*sections*(2*nrows+1)+1):(stepsPerSection*sections*(3*nrows+1))])^0.14
+          Nu_t = 1.86*Gz_t^(1/3)*(Mu[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]/Mu[(stepsPerSection*sections*(2*nrows+1)+1):(stepsPerSection*sections*(3*nrows+1))])^0.14
         }
         
         
         # Heat transfer coeffcient
-        h_s <<- Nu_s*K[1:(stepsPerSection*sections*(nrows+1))]/dht
-        h_t <<- Nu_t*K[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]/dht
+        h_s = Nu_s*K[1:(stepsPerSection*sections*(nrows+1))]/dht
+        h_t = Nu_t*K[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]/dht
         
         # Matrix coefficients
         Tube_vector = vector()
@@ -811,7 +838,7 @@ server = function(input,output,session){
           }
         }
         
-        # Set up a new ht vector because stein said so (and to match hs)
+        # Set up a new ht vector and to match hs
         h_t_extended = c(h_t, rep(NA,sections*stepsPerSection))
         for (i in seq(2,sections, by = 2)) {
           for (j in (nrows+1):1) {
@@ -824,15 +851,25 @@ server = function(input,output,session){
           }
         }
         
-        shellCoefficient1 = 1 - h_s*Tube_vector*SA_ot/(sections*2*input$Fs*Cp[1:(stepsPerSection*sections*(nrows+1))])
-        shellCoefficient2 = -1 - h_s*Tube_vector*SA_ot/(sections*2*input$Fs*Cp[1:(stepsPerSection*sections*(nrows+1))])
-        shellCoefficient3 = h_s*Tube_vector*SA_ot/(sections*input$Fs*Cp[1:(stepsPerSection*sections*(nrows+1))])
+
+        shellCoefficient1 = 1 - h_s*Tube_vector*SA_ot/(sections*2*Fs*Cp[1:(stepsPerSection*sections*(nrows+1))])
+        shellCoefficient2 = -1 - h_s*Tube_vector*SA_ot/(sections*2*Fs*Cp[1:(stepsPerSection*sections*(nrows+1))])
+        shellCoefficient3 = h_s*Tube_vector*SA_ot/(sections*Fs*Cp[1:(stepsPerSection*sections*(nrows+1))])
+        for (i in 1:(stepsPerSection*sections*(nrows+1))) {
+          if (Temp[i] < Tcond && input$fluid == "vw") {
+            shellCoefficient1[i] =  -h_s[i]*Tube_vector[i]*SA_ot/(sections*2*stepsPerSection)
+            shellCoefficient2[i] = shellCoefficient1[i]
+            shellCoefficient3[i] = h_s[i]*Tube_vector[i]*SA_ot/(sections*stepsPerSection)
+            rhs_vector[i] = Mcond[i]*Hvap[i]
+            print(Mcond[i], digits = 10)
+          }
+        }
         tubeCoefficient1 = -1
         tubeCoefficient2 = 1 - h_t*sum(Ntubes_row)*SA_it/(sections*stepsPerSection*input$Ft*Cp[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))])
         tubeCoefficient3 = h_t*sum(Ntubes_row)*SA_it/(sections*stepsPerSection*input$Ft*Cp[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))])
-        wallCoefficient1 <<- h_s*SA_ot/(2*(h_s*SA_ot + h_t_extended*SA_it))
+        wallCoefficient1 = h_s*SA_ot/(2*(h_s*SA_ot + h_t_extended*SA_it))
         wallCoefficient2 = wallCoefficient1
-        wallCoefficient3 <<- h_t_extended*SA_it/(h_s*SA_ot + h_t_extended*SA_it)
+        wallCoefficient3 = h_t_extended*SA_it/(h_s*SA_ot + h_t_extended*SA_it)
         wallCoefficient4 = -1
         
         # Shell for the shell equation (downward flow)
@@ -878,11 +915,6 @@ server = function(input,output,session){
           }
         }
         
-        # Known inlet tube stuff for matrix
-        for (i in seq(sections*stepsPerSection*(length(Ntubes_row)+2),sections*stepsPerSection*(2*length(Ntubes_row)+1),by = sections*stepsPerSection)) {
-          T_matrix[i,i] = 1
-          rhs_vector[i] = input$Tti
-        }
         
         # Wall for the wall equation (downward flow)
         for (i in seq(1+stepsPerSection*sections*(2*nrows+1),sections*stepsPerSection*(2*nrows+2),by = stepsPerSection*2)) {
@@ -902,7 +934,6 @@ server = function(input,output,session){
             
           }
         }
-        T_matrix <<- T_matrix
         
         # Wall for the wall equation (upward flow)
         for (i in seq(1+stepsPerSection*sections*(2*nrows+1)+stepsPerSection,sections*stepsPerSection*(2*nrows+2),by = stepsPerSection*2)) {
@@ -924,14 +955,105 @@ server = function(input,output,session){
         }
         
         
-        T_matrix <<- T_matrix
-        rhs_vector <<- rhs_vector
+        T_matrix = T_matrix
+        rhs_vector = rhs_vector
+        
+        #Fs = Fs
+        
         
         # Solve matrix problem using LU decomposition
-        x_vector <<- lusys(T_matrix,rhs_vector)
+        x_vector = lusys(T_matrix,rhs_vector)
+        for (i in 1:(stepsPerSection*sections*(nrows+1))) {
+          if (x_vector[i] < Tcond && input$fluid == "vw") {
+            x_vector[i] = Tcond
+          }
+        }
+        
+        
         err = sqrt(mean(((x_vector - Temp)/Temp)^2))
         Temp = x_vector
         print(err)
+        
+        Q = input$Ft*Cp[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]*(
+          Temp[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))] - 
+          Temp[(stepsPerSection*sections*(nrows+1)+2):(stepsPerSection*sections*(2*nrows+1)+1)])
+        for (i in 1:nrows) {
+          Q[stepsPerSection*sections*i] = 0
+        }
+        
+
+        
+        if (input$fluid == "vw"){
+          # Set up a new ht vector and to match hs
+          Q_extended = c(Q, rep(NA,sections*stepsPerSection))
+          for (i in seq(2,sections, by = 2)) {
+            for (j in (nrows+1):1) {
+              if (j == 1){
+                Q_extended[((j-1)*sections*stepsPerSection + (i-1)*stepsPerSection + 1):((j-1)*sections*stepsPerSection + (i)*stepsPerSection)] = NA
+              } else {
+                Q_extended[((j-1)*sections*stepsPerSection + (i-1)*stepsPerSection + 1):((j-1)*sections*stepsPerSection + (i)*stepsPerSection)] = 
+                  Q[((j-2)*sections*stepsPerSection + (i-1)*stepsPerSection + 1):((j-2)*sections*stepsPerSection + (i)*stepsPerSection)]
+              }
+            }
+          }
+          
+          for (i in 1:(stepsPerSection*sections*(nrows+1))) {
+            if (Temp[i] <= Tcond && input$fluid == "vw") {
+              Mcond[i] = Q_extended[i]/Hvap[i]
+            } else {
+              Mcond[i] = 0
+            }
+          }
+          
+          for (i in seq(1+stepsPerSection*2,sections*stepsPerSection,by = stepsPerSection*2)) {
+            
+            Mcond[(i-stepsPerSection):(i-1)] = 0
+            
+          }
+          for (i in seq(sections*stepsPerSection*nrows+stepsPerSection+1,sections*stepsPerSection*(nrows+1),by = stepsPerSection*2)) {
+            
+            Mcond[(i-stepsPerSection):(i-1)] = 0
+            
+          }
+          
+          testFs2 <<- Fs
+          testQ <<- Q_extended
+          testTemp <<- Temp
+          
+          
+          # Calculating cumulative mass loss due to cond.
+          for (i in 1:sections) {
+            for (j in 1:(nrows+1)) {
+              if (i %% 2 == 0) {
+                k = nrows + 2 - j
+                if (k == nrows + 1){
+                  Fs[((i-1)*stepsPerSection +1+nrows*stepsPerSection*sections):(i*stepsPerSection+nrows*stepsPerSection*sections)] = 
+                    mean(Fs[((i-2)*stepsPerSection +1+nrows*stepsPerSection*sections):((i-1)*stepsPerSection+nrows*stepsPerSection*sections)])
+                } else {
+                  Fs[((i-1)*stepsPerSection+1+(k-1)*stepsPerSection*sections):(i*stepsPerSection+(k-1)*stepsPerSection*sections)] = 
+                    Fs[((i-1)*stepsPerSection +1+k*stepsPerSection*sections):(i*stepsPerSection+k*stepsPerSection*sections)] -
+                    Mcond[((i-1)*stepsPerSection +1+k*stepsPerSection*sections):(i*stepsPerSection+k*stepsPerSection*sections)] 
+                }
+              } else {
+                if (j == 1 && i != 1){
+                  Fs[((i-1)*stepsPerSection +1):(i*stepsPerSection)] = mean(Fs[((i-2)*stepsPerSection +1):((i-1)*stepsPerSection)])
+                } else if (j == 1 && i == 1) {
+                  Fs[1:stepsPerSection] = input$Fs/stepsPerSection
+                } else {
+                  Fs[((i-1)*stepsPerSection +1+(j-1)*stepsPerSection*sections):(i*stepsPerSection+(j-1)*stepsPerSection*sections)] = 
+                    Fs[((i-1)*stepsPerSection +1+(j-2)*stepsPerSection*sections):(i*stepsPerSection+(j-2)*stepsPerSection*sections)] -
+                    Mcond[((i-1)*stepsPerSection +1+(j-2)*stepsPerSection*sections):(i*stepsPerSection+(j-2)*stepsPerSection*sections)] 
+                }
+              }
+            }
+          }
+        }
+        
+        testcond <<- Mcond
+        testFs <<- Fs
+        testhvap <<- Hvap
+        
+        
       }
       
       
@@ -952,7 +1074,7 @@ server = function(input,output,session){
       }
       
       
-      heatmapdata <<- heatmapdata # save as global variable for debugging
+      heatmapdata = heatmapdata # save as global variable for debugging
       
       tubelines = list()
       # Create border lines for tubes in heatmap
@@ -990,13 +1112,16 @@ server = function(input,output,session){
       
       lines = c(lines,tubelines)
       
+      heatmaptext = list()
+      for (i in 1:nrow(heatmapdata)) {
+        heatmaptext[[i]] = paste(round(heatmapdata[i,1:(sections*stepsPerSection)],digits = 2), "K", sep = " ")
+      }
+      
+      
       # Create plot and output
       output$plot1 = renderPlotly({
         plot_ly(z = heatmapdata, type = "heatmap", hoverinfo = 'text', 
-                #text = list(paste(round(heatmapdata[1,1:(sections*stepsPerSection)],digits = 2), "K", sep = " "),
-                #     paste(round(heatmapdata[2,1:(sections*stepsPerSection)],digits = 2), "K", sep = " "),
-                #     paste(round(heatmapdata[3,1:(sections*stepsPerSection)],digits = 2), "K", sep = " ")
-                #),
+                text = heatmaptext,
                 colorscale = "RdBu", 
                 colorbar = list(len = 1, title = list(text = "Temperature (K)",side = "right"))) %>%
           config(displayModeBar = F) %>%
@@ -1020,9 +1145,11 @@ server = function(input,output,session){
             )
           )
       })
+      
+      
+      
     })
     }
-    
   })
 }
 

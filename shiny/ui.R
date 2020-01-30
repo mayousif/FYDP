@@ -10,11 +10,14 @@ ui = fluidPage(title = "HX Modelling", shinyjs::useShinyjs(),
                )
              ),
              fluidRow(
-               column(4, align = "right",
+               column(4,
                       numericInput("Fs", HTML("Shell Flowrate (kg/s)"),"", value = 0.0498),
                       numericInput("Ft", HTML("Tube Flowrate (kg/s)"),"", value = 0.0265),
                       numericInput("Tsi", HTML("Inlet Shell Temperature (K)"),"", value = 322.3),
+                      numericInput("P", HTML("Shell Pressure (Pa)"),"", value = 101325),
                       numericInput("Tti", HTML("Inlet Tube Temperature (K)"),"", value = 283.4),
+                      numericInput("RH", HTML("Inlet Relative Humidity (%)"),"", value = 69),
+                      selectInput("fluid", HTML("Inlet Shell Fluid"),choices = c("Liquid Water" = "lw", "Vapour Water" = "vw"))
                       #numericInput("Cps", HTML("Shell Heat Capacity (J/(kg K)"),"", value = 4184),
                       #numericInput("Cpt", HTML("Tube Heat Capacity (J/(kg K)"),"",value = 4184),
                       #numericInput("hs", HTML("Shell Heat Transfer Coefficient (W/(m<sup>2</sup> K)"),"", value = 1000),
@@ -33,7 +36,7 @@ ui = fluidPage(title = "HX Modelling", shinyjs::useShinyjs(),
                                    selected = "square"),
                       textInput("ntubesrow", HTML("Number of Tubes Per Row"),"1,3,1", placeholder = "1,3,5,3,1")
                ),
-               column(4, align = "left",
+               column(4, align = "right",
                       numericInput("modelsteps", HTML("# of Model Steps"),"", value = 20),
                       numericInput("baffles", HTML("# of Baffles"),"",value = 3)
                )
