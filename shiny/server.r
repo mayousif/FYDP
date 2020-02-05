@@ -1049,9 +1049,9 @@ server = function(input,output,session){
           }
         }
         
-        testcond <<- Mcond
-        testFs <<- Fs
-        testhvap <<- Hvap
+        # testcond <<- Mcond
+        # testFs <<- Fs
+        # testhvap <<- Hvap
         
         
       }
