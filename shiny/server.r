@@ -676,7 +676,8 @@ server = function(input,output,session){
       
       
       err = 1
-      while (err > 0.01) { 
+      karisux = 1
+      while (karisux < 20) { 
         # Create matrix containing all calclated temp values
         T_matrix = matrix(data = 0, ncol = stepsPerSection*sections*(3*nrows+1),nrow = stepsPerSection*sections*(3*nrows+1))
         
@@ -850,18 +851,17 @@ server = function(input,output,session){
             }
           }
         }
-        
+        testht <<- h_t_extended
 
         shellCoefficient1 = 1 - h_s*Tube_vector*SA_ot/(sections*2*Fs*Cp[1:(stepsPerSection*sections*(nrows+1))])
         shellCoefficient2 = -1 - h_s*Tube_vector*SA_ot/(sections*2*Fs*Cp[1:(stepsPerSection*sections*(nrows+1))])
         shellCoefficient3 = h_s*Tube_vector*SA_ot/(sections*Fs*Cp[1:(stepsPerSection*sections*(nrows+1))])
         for (i in 1:(stepsPerSection*sections*(nrows+1))) {
-          if (Temp[i] < Tcond && input$fluid == "vw") {
+          if (Temp[i] <= Tcond && input$fluid == "vw") {
             shellCoefficient1[i] =  -h_s[i]*Tube_vector[i]*SA_ot/(sections*2*stepsPerSection)
             shellCoefficient2[i] = shellCoefficient1[i]
             shellCoefficient3[i] = h_s[i]*Tube_vector[i]*SA_ot/(sections*stepsPerSection)
             rhs_vector[i] = Mcond[i]*Hvap[i]
-            print(Mcond[i], digits = 10)
           }
         }
         tubeCoefficient1 = -1
@@ -959,10 +959,13 @@ server = function(input,output,session){
         rhs_vector = rhs_vector
         
         #Fs = Fs
+        testmatrix <<- T_matrix
+        testb <<- rhs_vector
         
         
         # Solve matrix problem using LU decomposition
         x_vector = lusys(T_matrix,rhs_vector)
+        testxvector <<- x_vector
         for (i in 1:(stepsPerSection*sections*(nrows+1))) {
           if (x_vector[i] < Tcond && input$fluid == "vw") {
             x_vector[i] = Tcond
@@ -996,6 +999,7 @@ server = function(input,output,session){
               }
             }
           }
+          testqext <<- Q_extended
           
           for (i in 1:(stepsPerSection*sections*(nrows+1))) {
             if (Temp[i] <= Tcond && input$fluid == "vw") {
@@ -1005,18 +1009,17 @@ server = function(input,output,session){
             }
           }
           
-          for (i in seq(1+stepsPerSection*2,sections*stepsPerSection,by = stepsPerSection*2)) {
+          for (i in seq(1+stepsPerSection,sections*stepsPerSection,by = stepsPerSection*2)) {
             
-            Mcond[(i-stepsPerSection):(i-1)] = 0
+            Mcond[i:(i+stepsPerSection-1)] = 0
             
           }
-          for (i in seq(sections*stepsPerSection*nrows+stepsPerSection+1,sections*stepsPerSection*(nrows+1),by = stepsPerSection*2)) {
+          for (i in seq(sections*stepsPerSection*nrows+1,sections*stepsPerSection*(nrows+1),by = stepsPerSection*2)) {
             
-            Mcond[(i-stepsPerSection):(i-1)] = 0
+            Mcond[i:(i+stepsPerSection-1)] = 0
             
           }
           
-          testFs2 <<- Fs
           testQ <<- Q_extended
           testTemp <<- Temp
           
@@ -1049,11 +1052,16 @@ server = function(input,output,session){
           }
         }
         
-        # testcond <<- Mcond
-        # testFs <<- Fs
-        # testhvap <<- Hvap
-        
-        
+         testcond <<- Mcond
+         testFs <<- Fs
+         testhvap <<- Hvap
+         testdens <<- Dens
+         testmu <<- Mu
+         testk <<- K
+         tesths <<- h_s
+         
+         
+        karisux = karisux +1
       }
       
       
