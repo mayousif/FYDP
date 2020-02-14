@@ -656,7 +656,6 @@ server = function(input,output,session){
           }
         }
       }
-      
       # Number of tube rows
       nrows = length(Ntubes_row)
       
@@ -666,7 +665,7 @@ server = function(input,output,session){
                  rep(mean(c(input$Tti,input$Tsi)),times = nrows*sections*stepsPerSection))
       
       # Create mass flowrate vector
-      Fs = rep(input$Fs,stepsPerSection*sections*(nrows+1))
+      Fs = rep(input$Fs/stepsPerSection,stepsPerSection*sections*(nrows+1))
       
       # Create condensed mass vector
       Mcond = rep(0,stepsPerSection*sections*(nrows+1))
@@ -674,13 +673,16 @@ server = function(input,output,session){
       # Create RH vector
       RH = rep(input$RH,stepsPerSection*sections*(nrows+1))
       
-      
       err = 1
       karisux = 1
-      while (karisux < 20) { 
+      while (karisux < 3) { 
+        
         # Create matrix containing all calclated temp values
         T_matrix = matrix(data = 0, ncol = stepsPerSection*sections*(3*nrows+1),nrow = stepsPerSection*sections*(3*nrows+1))
         
+        test1 <<- sections
+        test2 <<-stepsPerSection
+        test3 <<- T_matrix
         # Initial values + averaging for next section
         for (i in seq(1,sections*stepsPerSection,by = stepsPerSection*2)) {
           
@@ -692,17 +694,20 @@ server = function(input,output,session){
           T_matrix[i:(stepsPerSection+i-1),i:(stepsPerSection+i-1)] = diag(stepsPerSection)
           
         }
-        for (i in seq(1+stepsPerSection*2,sections*stepsPerSection,by = stepsPerSection*2)) {
-          
-          T_matrix[i:(stepsPerSection+i-1),(i-stepsPerSection):(i-1)] = matrix(data = -1/stepsPerSection,ncol = stepsPerSection, nrow = stepsPerSection)
-          
+        
+        if (sections > 2){
+          for (i in seq(1+stepsPerSection*2,sections*stepsPerSection,by = stepsPerSection*2)) {
+            
+            T_matrix[i:(stepsPerSection+i-1),(i-stepsPerSection):(i-1)] = matrix(data = -1/stepsPerSection,ncol = stepsPerSection, nrow = stepsPerSection)
+            
+          }
         }
+        
         for (i in seq(sections*stepsPerSection*nrows+stepsPerSection+1,sections*stepsPerSection*(nrows+1),by = stepsPerSection*2)) {
           
           T_matrix[i:(stepsPerSection+i-1),(i-stepsPerSection):(i-1)] = matrix(data = -1/stepsPerSection,ncol = stepsPerSection, nrow = stepsPerSection)
           
         }
-        
         # Right hand side solution to matrix equation
         rhs_vector = rep(0, stepsPerSection*sections*(3*nrows+1))
         rhs_vector[1:stepsPerSection] = input$Tsi
@@ -735,9 +740,11 @@ server = function(input,output,session){
           Hvap = hvap_vw(Temp[1:(stepsPerSection*sections*(nrows+1))])
         }
         
-        
         # Reynolds #
-        vs = Fs/(Dens[1:(stepsPerSection*sections)]*CSA_s_vector)
+        
+        
+        
+        vs = Fs/(Dens[1:(stepsPerSection*sections*(nrows+1))]*CSA_s_vector)
         vt = input$Ft/(Dens[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]*CSA_t*sum(Ntubes_row))
         
         vs_max = vs*pitch_x/(pitch_x-(input$tid + 2*input$tt))
@@ -747,9 +754,15 @@ server = function(input,output,session){
           vs_max = pitch_x/2*vs/(pitch_diag - input$tid - 2*input$tt)
         } 
         
+        testvs <<- vs
+        
         Re_s = Dens[1:(stepsPerSection*sections*(nrows+1))]*dht*vs_max/Mu[1:(stepsPerSection*sections*(nrows+1))]
         Re_t = Dens[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]*dht*vt/Mu[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]
         Re_d = Dens[1:(stepsPerSection*sections*(nrows+1))]*dht*vs/Mu[1:(stepsPerSection*sections*(nrows+1))]
+        
+        testres <<- Re_s
+        testret <<- Re_t
+        
         
         
         # Prandtl #
@@ -822,10 +835,15 @@ server = function(input,output,session){
           Nu_t = 1.86*Gz_t^(1/3)*(Mu[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]/Mu[(stepsPerSection*sections*(2*nrows+1)+1):(stepsPerSection*sections*(3*nrows+1))])^0.14
         }
         
+        testNUT <<- Nu_t
+        testNUS <<- Nu_s
+        testKKK <<- K
         
         # Heat transfer coeffcient
         h_s = Nu_s*K[1:(stepsPerSection*sections*(nrows+1))]/dht
+        h_s = h_s*300
         h_t = Nu_t*K[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]/dht
+        
         
         # Matrix coefficients
         Tube_vector = vector()
@@ -853,17 +871,34 @@ server = function(input,output,session){
         }
         testht <<- h_t_extended
 
-        shellCoefficient1 = 1 - h_s*Tube_vector*SA_ot/(sections*2*Fs*Cp[1:(stepsPerSection*sections*(nrows+1))])
-        shellCoefficient2 = -1 - h_s*Tube_vector*SA_ot/(sections*2*Fs*Cp[1:(stepsPerSection*sections*(nrows+1))])
-        shellCoefficient3 = h_s*Tube_vector*SA_ot/(sections*Fs*Cp[1:(stepsPerSection*sections*(nrows+1))])
-        for (i in 1:(stepsPerSection*sections*(nrows+1))) {
-          if (Temp[i] <= Tcond && input$fluid == "vw") {
-            shellCoefficient1[i] =  -h_s[i]*Tube_vector[i]*SA_ot/(sections*2*stepsPerSection)
-            shellCoefficient2[i] = shellCoefficient1[i]
-            shellCoefficient3[i] = h_s[i]*Tube_vector[i]*SA_ot/(sections*stepsPerSection)
-            rhs_vector[i] = Mcond[i]*Hvap[i]
+        shellCoefficient1 = 1 - h_s*Tube_vector*SA_ot/(stepsPerSection*sections*2*Fs*Cp[1:(stepsPerSection*sections*(nrows+1))])
+        shellCoefficient2 = -1 - h_s*Tube_vector*SA_ot/(stepsPerSection*sections*2*Fs*Cp[1:(stepsPerSection*sections*(nrows+1))])
+        shellCoefficient3 = h_s*Tube_vector*SA_ot/(stepsPerSection*sections*Fs*Cp[1:(stepsPerSection*sections*(nrows+1))])
+        # for (i in 1:(stepsPerSection*sections*(nrows+1))) {
+        #   if (Temp[i] <= Tcond && input$fluid == "vw") {
+        #     shellCoefficient1[i] =  -h_s[i]*Tube_vector[i]*SA_ot/(sections*2*stepsPerSection)
+        #     shellCoefficient2[i] = shellCoefficient1[i]
+        #     shellCoefficient3[i] = h_s[i]*Tube_vector[i]*SA_ot/(sections*stepsPerSection)
+        #     
+        #     rhs_vector[i] = -Mcond[i]*Hvap[i]
+        #   }
+        # }
+        for (i in 1:(sections*stepsPerSection)) {
+          for (j in 0:nrows){
+            if (Temp[i+j*stepsPerSection*sections] <= Tcond && input$fluid == "vw") {
+              shellCoefficient1[i+j*stepsPerSection*sections] =  -h_s[i+j*stepsPerSection*sections]*Tube_vector[i+j*stepsPerSection*sections]*SA_ot/(sections*2*stepsPerSection)
+              shellCoefficient2[i+j*stepsPerSection*sections] = shellCoefficient1[i+j*stepsPerSection*sections]
+              shellCoefficient3[i+j*stepsPerSection*sections] = h_s[i+j*stepsPerSection*sections]*Tube_vector[i+j*stepsPerSection*sections]*SA_ot/(sections*stepsPerSection)
+              if (ceiling(i/stepsPerSection) %%2 == 0 && j != nrows) {
+                rhs_vector[i+j*stepsPerSection*sections] = -Mcond[i+(j+1)*stepsPerSection*sections]*Hvap[i+(j+1)*stepsPerSection*sections]
+              } else if (ceiling(i/stepsPerSection) %%2 == 1 && j != 0) {
+                rhs_vector[i+j*stepsPerSection*sections] = -Mcond[i+(j-1)*stepsPerSection*sections]*Hvap[i+(j-1)*stepsPerSection*sections]
+              }
+            }
           }
         }
+        
+        
         tubeCoefficient1 = -1
         tubeCoefficient2 = 1 - h_t*sum(Ntubes_row)*SA_it/(sections*stepsPerSection*input$Ft*Cp[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))])
         tubeCoefficient3 = h_t*sum(Ntubes_row)*SA_it/(sections*stepsPerSection*input$Ft*Cp[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))])
@@ -981,7 +1016,7 @@ server = function(input,output,session){
           Temp[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))] - 
           Temp[(stepsPerSection*sections*(nrows+1)+2):(stepsPerSection*sections*(2*nrows+1)+1)])
         for (i in 1:nrows) {
-          Q[stepsPerSection*sections*i] = 0
+          Q[stepsPerSection*sections*i] = Q[stepsPerSection*sections*i-1]
         }
         
 
@@ -999,7 +1034,6 @@ server = function(input,output,session){
               }
             }
           }
-          testqext <<- Q_extended
           
           for (i in 1:(stepsPerSection*sections*(nrows+1))) {
             if (Temp[i] <= Tcond && input$fluid == "vw") {
@@ -1019,9 +1053,6 @@ server = function(input,output,session){
             Mcond[i:(i+stepsPerSection-1)] = 0
             
           }
-          
-          testQ <<- Q_extended
-          testTemp <<- Temp
           
           
           # Calculating cumulative mass loss due to cond.
@@ -1050,15 +1081,17 @@ server = function(input,output,session){
               }
             }
           }
+          
+          
+          
+          
+          
+          
         }
         
          testcond <<- Mcond
-         testFs <<- Fs
-         testhvap <<- Hvap
+         #testhvap <<- Hvap
          testdens <<- Dens
-         testmu <<- Mu
-         testk <<- K
-         tesths <<- h_s
          
          
         karisux = karisux +1
