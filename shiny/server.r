@@ -674,15 +674,11 @@ server = function(input,output,session){
       RH = rep(input$RH,stepsPerSection*sections*(nrows+1))
       
       err = 1
-      karisux = 1
-      while (karisux < 3) { 
+      while (err < 0.001) { 
         
         # Create matrix containing all calclated temp values
         T_matrix = matrix(data = 0, ncol = stepsPerSection*sections*(3*nrows+1),nrow = stepsPerSection*sections*(3*nrows+1))
         
-        test1 <<- sections
-        test2 <<-stepsPerSection
-        test3 <<- T_matrix
         # Initial values + averaging for next section
         for (i in seq(1,sections*stepsPerSection,by = stepsPerSection*2)) {
           
@@ -753,16 +749,11 @@ server = function(input,output,session){
           pitch_diag = sqrt((pitch_x/2)^2 + pitch_y^2)
           vs_max = pitch_x/2*vs/(pitch_diag - input$tid - 2*input$tt)
         } 
-        
-        testvs <<- vs
+      
         
         Re_s = Dens[1:(stepsPerSection*sections*(nrows+1))]*dht*vs_max/Mu[1:(stepsPerSection*sections*(nrows+1))]
         Re_t = Dens[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]*dht*vt/Mu[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]
         Re_d = Dens[1:(stepsPerSection*sections*(nrows+1))]*dht*vs/Mu[1:(stepsPerSection*sections*(nrows+1))]
-        
-        testres <<- Re_s
-        testret <<- Re_t
-        
         
         
         # Prandtl #
@@ -835,10 +826,6 @@ server = function(input,output,session){
           Nu_t = 1.86*Gz_t^(1/3)*(Mu[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]/Mu[(stepsPerSection*sections*(2*nrows+1)+1):(stepsPerSection*sections*(3*nrows+1))])^0.14
         }
         
-        testNUT <<- Nu_t
-        testNUS <<- Nu_s
-        testKKK <<- K
-        
         # Heat transfer coeffcient
         h_s = Nu_s*K[1:(stepsPerSection*sections*(nrows+1))]/dht
         h_s = h_s*300
@@ -869,7 +856,6 @@ server = function(input,output,session){
             }
           }
         }
-        testht <<- h_t_extended
 
         shellCoefficient1 = 1 - h_s*Tube_vector*SA_ot/(stepsPerSection*sections*2*Fs*Cp[1:(stepsPerSection*sections*(nrows+1))])
         shellCoefficient2 = -1 - h_s*Tube_vector*SA_ot/(stepsPerSection*sections*2*Fs*Cp[1:(stepsPerSection*sections*(nrows+1))])
@@ -886,8 +872,9 @@ server = function(input,output,session){
         for (i in 1:(sections*stepsPerSection)) {
           for (j in 0:nrows){
             if (Temp[i+j*stepsPerSection*sections] <= Tcond && input$fluid == "vw") {
-              shellCoefficient1[i+j*stepsPerSection*sections] =  -h_s[i+j*stepsPerSection*sections]*Tube_vector[i+j*stepsPerSection*sections]*SA_ot/(sections*2*stepsPerSection)
-              shellCoefficient2[i+j*stepsPerSection*sections] = shellCoefficient1[i+j*stepsPerSection*sections]
+              shellCoefficient1[i+j*stepsPerSection*sections] =  -h_s[i+j*stepsPerSection*sections]*Tube_vector[i+j*stepsPerSection*sections]*SA_ot/(sections*stepsPerSection)
+              #shellCoefficient2[i+j*stepsPerSection*sections] = shellCoefficient1[i+j*stepsPerSection*sections]
+              shellCoefficient2[i+j*stepsPerSection*sections] = 0
               shellCoefficient3[i+j*stepsPerSection*sections] = h_s[i+j*stepsPerSection*sections]*Tube_vector[i+j*stepsPerSection*sections]*SA_ot/(sections*stepsPerSection)
               if (ceiling(i/stepsPerSection) %%2 == 0 && j != nrows) {
                 rhs_vector[i+j*stepsPerSection*sections] = -Mcond[i+(j+1)*stepsPerSection*sections]*Hvap[i+(j+1)*stepsPerSection*sections]
@@ -993,14 +980,9 @@ server = function(input,output,session){
         T_matrix = T_matrix
         rhs_vector = rhs_vector
         
-        #Fs = Fs
-        testmatrix <<- T_matrix
-        testb <<- rhs_vector
-        
         
         # Solve matrix problem using LU decomposition
         x_vector = lusys(T_matrix,rhs_vector)
-        testxvector <<- x_vector
         for (i in 1:(stepsPerSection*sections*(nrows+1))) {
           if (x_vector[i] < Tcond && input$fluid == "vw") {
             x_vector[i] = Tcond
@@ -1083,18 +1065,7 @@ server = function(input,output,session){
           }
           
           
-          
-          
-          
-          
         }
-        
-         testcond <<- Mcond
-         #testhvap <<- Hvap
-         testdens <<- Dens
-         
-         
-        karisux = karisux +1
       }
       
       
