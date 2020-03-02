@@ -17,7 +17,7 @@ server = function(input,output,session){
     SA_os = pi*(2*input$st + input$sid)*input$L
     
     # Number of tubes per row vector
-    Ntubes_row <<- as.numeric(unlist(strsplit(input$ntubesrow,split = ",")))
+    Ntubes_row = as.numeric(unlist(strsplit(input$ntubesrow,split = ",")))
     
     # Liquid water properties
     dens_lw = function(x) {
@@ -82,52 +82,53 @@ server = function(input,output,session){
       dht = input$tid
       
       # Inital temperature estimate vector
-      Temp <<- c(rep(input$Tsi,times = input$modelsteps),
+      Temp = c(rep(input$Tsi,times = input$modelsteps),
                  rep(input$Tti,times = input$modelsteps),
                  rep(mean(c(input$Tti,input$Tsi)),times = input$modelsteps))
       
       err = 1
       while (err > 0.001) { 
         # Create matrix containing all calclated temp values
-        T_matrix <<- matrix(data = 0, ncol = input$modelsteps*3,nrow = input$modelsteps*3)
+        T_matrix = matrix(data = 0, ncol = input$modelsteps*3,nrow = input$modelsteps*3)
         
         # Properties
-        Dens <<- dens_lw(Temp)
-        Cp <<- cp_lw(Temp)
-        Mu <<- mu_lw(Temp)
-        K <<- k_lw(Temp)
+        Dens = dens_lw(Temp)
+        Cp = cp_lw(Temp)
+        Mu = mu_lw(Temp)
+        K = k_lw(Temp)
         
         # Reynolds #
-        vs <<- input$Fs/(Dens[1:input$modelsteps]*CSA_s)
-        vt <<- input$Ft/(Dens[(input$modelsteps+1):(2*input$modelsteps)]*CSA_t)
-        Re_s <<- Dens[1:input$modelsteps]*dhs*vs/Mu[1:input$modelsteps]
-        Re_t <<- Dens[(input$modelsteps+1):(2*input$modelsteps)]*dht*vt/Mu[(input$modelsteps+1):(2*input$modelsteps)]
+        vs = input$Fs/(Dens[1:input$modelsteps]*CSA_s)
+        vt = input$Ft/(Dens[(input$modelsteps+1):(2*input$modelsteps)]*CSA_t)
+        Re_s = Dens[1:input$modelsteps]*dhs*vs/Mu[1:input$modelsteps]
+        Re_t = Dens[(input$modelsteps+1):(2*input$modelsteps)]*dht*vt/Mu[(input$modelsteps+1):(2*input$modelsteps)]
         
         # Prandtl #
-        Pr_s <<- Mu[1:input$modelsteps]*Cp[1:input$modelsteps]/K[1:input$modelsteps]
-        Pr_t <<- Mu[(input$modelsteps+1):(2*input$modelsteps)]*Cp[(input$modelsteps+1):(2*input$modelsteps)]/K[(input$modelsteps+1):(2*input$modelsteps)]
+        Pr_s = Mu[1:input$modelsteps]*Cp[1:input$modelsteps]/K[1:input$modelsteps]
+        Pr_t = Mu[(input$modelsteps+1):(2*input$modelsteps)]*Cp[(input$modelsteps+1):(2*input$modelsteps)]/K[(input$modelsteps+1):(2*input$modelsteps)]
         
         # Graetz #
-        Gz_s <<- dhs/input$L*Re_s*Pr_s
-        Gz_t <<- dht/input$L*Re_t*Pr_t
+        Gz_s = dhs/input$L*Re_s*Pr_s
+        Gz_t = dht/input$L*Re_t*Pr_t
         
         # Nusselt #
         if (mean(Re_s) > 2100) {
-          Nu_s <<- 0.027*Re_s^0.8*Pr_s^(1/3)*(Mu[1:input$modelsteps]/Mu[(2*input$modelsteps+1):(3*input$modelsteps)])^0.14
+          Nu_s = 0.027*Re_s^0.8*Pr_s^(1/3)*(Mu[1:input$modelsteps]/Mu[(2*input$modelsteps+1):(3*input$modelsteps)])^0.14
         } else {
-          Nu_s <<- 1.86*Gz_s^(1/3)*(Mu[1:input$modelsteps]/Mu[(2*input$modelsteps+1):(3*input$modelsteps)])^0.14
+          Nu_s = 1.86*Gz_s^(1/3)*(Mu[1:input$modelsteps]/Mu[(2*input$modelsteps+1):(3*input$modelsteps)])^0.14
         }
         
         if (mean(Re_t) > 2100) {
-          Nu_t <<- 0.027*Re_t^0.8*Pr_t^(1/3)*(Mu[(input$modelsteps+1):(2*input$modelsteps)]/Mu[(2*input$modelsteps+1):(3*input$modelsteps)])^0.14
+          Nu_t = 0.027*Re_t^0.8*Pr_t^(1/3)*(Mu[(input$modelsteps+1):(2*input$modelsteps)]/Mu[(2*input$modelsteps+1):(3*input$modelsteps)])^0.14
         } else {
-          Nu_t <<- 1.86*Gz_t^(1/3)*(Mu[(input$modelsteps+1):(2*input$modelsteps)]/Mu[(2*input$modelsteps+1):(3*input$modelsteps)])^0.14
+          Nu_t = 1.86*Gz_t^(1/3)*(Mu[(input$modelsteps+1):(2*input$modelsteps)]/Mu[(2*input$modelsteps+1):(3*input$modelsteps)])^0.14
         }
         
         # Heat transfer coeffcient
-        h_s <<- Nu_s*K[1:input$modelsteps]/dhs
-        h_t <<- Nu_t*K[(input$modelsteps+1):(2*input$modelsteps)]/dht
+        h_s = Nu_s*K[1:input$modelsteps]/dhs
+        h_t = Nu_t*K[(input$modelsteps+1):(2*input$modelsteps)]/dht
         
+        testhsdp <<- h_s
         
         # Insert coefficents for shell
         T_matrix[1,1] = 1
@@ -158,7 +159,7 @@ server = function(input,output,session){
         rhs_vector[2*input$modelsteps] = input$Tti
         
         # Solve matrix problem using LU decomposition
-        x_vector <<- lusys(T_matrix,rhs_vector)
+        x_vector = lusys(T_matrix,rhs_vector)
         
         err = sqrt(mean(((x_vector-Temp)/Temp)^2))*100
         Temp = x_vector
@@ -171,8 +172,6 @@ server = function(input,output,session){
       heatmapdata[1,1:input$modelsteps] = x_vector[1:input$modelsteps]
       heatmapdata[2,1:input$modelsteps] = x_vector[(input$modelsteps+1):(2*input$modelsteps)]
       heatmapdata[3,1:input$modelsteps] = x_vector[1:input$modelsteps]
-      
-      heatmapdata <<- heatmapdata # save as global variable for debugging
       
       # Create border lines for tubes in heatmap
       tubelines = list(
@@ -242,7 +241,6 @@ server = function(input,output,session){
       # Chord length and cross-sectional area of shell per row
       chord_length = 2*sqrt(2*pitch_y*((1:length(Ntubes_row))-0.5)*input$sid/2 - (pitch_y*((1:length(Ntubes_row))-0.5))^2)
       CSA_s = c(chord_length*input$L/(sections*stepsPerSection),0)
-      testchord <<- chord_length
       
       CSA_s_vector = vector()
       for (i in 1:length(CSA_s)) {
@@ -255,8 +253,6 @@ server = function(input,output,session){
           }
         }
       }
-      
-      testcsa <<- CSA_s_vector
       
       # Number of tube rows
       nrows = length(Ntubes_row)
@@ -352,19 +348,10 @@ server = function(input,output,session){
           pitch_diag = sqrt((pitch_x/2)^2 + pitch_y^2)
           vs_max = pitch_x/2*vs/(pitch_diag - input$tid - 2*input$tt)
         } 
-        testvs <<- vs
-        testpitchx <<- pitch_x
-        
-        testvsmax <<- vs_max
-        
-        
-        
         Re_s = Dens[1:(stepsPerSection*sections*(nrows+1))]*dht*vs_max/Mu[1:(stepsPerSection*sections*(nrows+1))]
         Re_t = Dens[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]*dht*vt/Mu[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]
         Re_d = Dens[1:(stepsPerSection*sections*(nrows+1))]*dht*vs/Mu[1:(stepsPerSection*sections*(nrows+1))]
         
-        
-        testre <<- Re_s
         
         # Prandtl #
         Pr_s = Mu[1:(stepsPerSection*sections*(nrows+1))]*Cp[1:(stepsPerSection*sections*(nrows+1))]/K[1:(stepsPerSection*sections*(nrows+1))]
@@ -385,7 +372,6 @@ server = function(input,output,session){
         }
         
         
-        
         # Graetz #
         Gz_t = dht/input$L*Re_t*Pr_t
         
@@ -403,22 +389,22 @@ server = function(input,output,session){
           if (input$config == "square") {
             
             # Reynolds if statement
-            if (mean(Re_s) < 100) {
+            if (mean(Re_s[Re_s != Inf],na.rm = T) < 100) {
               Nu_s = Nuss_func(0.8,0.4)
-            } else if (mean(Re_s) < 1000) {
+            } else if (mean(Re_s[Re_s != Inf],na.rm = T)  < 1000) {
               Nu_s = 0.3 + (0.62*(Re_d^0.5)*Pr_s^(1/3))/((1+(0.4/Pr_s)^(2/3))^0.25)*((1+(Re_d/282000)^0.625)^(0.8))
-            } else if (mean(Re_s) < 200000) {
+            } else if (mean(Re_s[Re_s != Inf],na.rm = T)  < 200000) {
               Nu_s = Nuss_func(0.27,0.63)
             } else {
               Nu_s = Nuss_func(0.021,0.84)
             }
             
           } else {
-            if (mean(Re_s) < 100) {
+            if (mean(Re_s[Re_s != Inf],na.rm = T)  < 100) {
               Nu_s = Nuss_func(0.9,0.4)
-            } else if (mean(Re_s) < 1000) {
+            } else if (mean(Re_s[Re_s != Inf],na.rm = T)  < 1000) {
               Nu_s = 0.3 + (0.62*(Re_d^0.5)*Pr_s^(1/3))/((1+(0.4/Pr_s)^(2/3))^0.25)*((1+(Re_d/282000)^0.625)^(0.8))
-            } else if (mean(Re_s) < 200000) {
+            } else if (mean(Re_s[Re_s != Inf],na.rm = T)  < 200000) {
               # Pitch if statement
               if (pitch_x/pitch_y < 2) {
                 Nu_s = Nuss_func(0.35*(pitch_x/pitch_y)^0.2,0.6)
@@ -431,17 +417,23 @@ server = function(input,output,session){
           }
         }
         
+        testres <<- Re_s
+        testNus <<- Nu_s
+        testPrs <<- Pr_s
+        testvsm <<- vs_max
+        testvs <<- vs
+        
+        
         if (mean(Re_t) > 2100) {
           Nu_t = 0.027*Re_t^0.8*Pr_t^(1/3)*(Mu[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]/Mu[(stepsPerSection*sections*(2*nrows+1)+1):(stepsPerSection*sections*(3*nrows+1))])^0.14
         } else {
           Nu_t = 1.86*Gz_t^(1/3)*(Mu[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]/Mu[(stepsPerSection*sections*(2*nrows+1)+1):(stepsPerSection*sections*(3*nrows+1))])^0.14
         }
         
-
         # Heat transfer coeffcient
         h_s = Nu_s*K[1:(stepsPerSection*sections*(nrows+1))]/dht
         h_t = Nu_t*K[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]/dht
-        
+
         # Matrix coefficients
         Tube_vector = vector()
         for (i in 1:(nrows+1)) {
@@ -453,6 +445,34 @@ server = function(input,output,session){
             }
           }
         }
+        
+        # Replace hs with film hs if condensation occurs
+        for (i in seq(1,sections*stepsPerSection,by = stepsPerSection*2)) {
+          for (j in seq(0,(length(Ntubes_row)-1)*sections*stepsPerSection,by = sections*stepsPerSection)) {
+            for (k in seq(0,stepsPerSection-1)) { 
+              if (count %%2 == 0 && Temp[i+j+k] <= Tcond) {
+                h_s[(i+j+k)] = 0.943*((k_lw(Tcond)^3*dens_lw(Tcond)^2*9.81*Hvap[i])/(mu_lw(Tcond)*(input$tid+2*input$tt)*(Tcond-Temp[(i+j+k+stepsPerSection*sections*(2*nrows+1))])))^0.25*(0.6+0.42*Tube_vector[i]^-0.25)
+              }
+            }
+          }
+        }
+        for (i in seq(1+stepsPerSection+sections*stepsPerSection,sections*stepsPerSection*2,by = stepsPerSection*2)) {
+          for (j in seq(0,(length(Ntubes_row)-1)*sections*stepsPerSection,by = sections*stepsPerSection)) {
+            for (k in seq(0,stepsPerSection-1)) {
+              if (count %%2 == 0 && Temp[i+j+k] <= Tcond) {
+                h_s[(i+j+k)] = 0.943*((k_lw(Tcond)^3*dens_lw(Tcond)^2*9.81*Hvap[i])/(mu_lw(Tcond)*(input$tid+2*input$tt)*(Tcond-Temp[(i+j+k+stepsPerSection*sections*(2*nrows))])))^0.25*(0.6+0.42*Tube_vector[i]^-0.25)
+              }
+            }
+          }
+        }
+        
+        
+        tesths <<- h_s
+        
+        # Replace hs with 0 if Fs is 0
+        # h_s[Fs == 0] = 0
+        
+
         # Set up a new ht vector and to match hs
         h_t_extended = c(h_t, rep(NA,sections*stepsPerSection))
         for (i in seq(2,sections, by = 2)) {
@@ -466,37 +486,10 @@ server = function(input,output,session){
           }
         }
         
-        tesths <<-h_s
-        
+        # Sensible heat coefficents
         shellCoefficient1 = 1 - h_s*Tube_vector*SA_ot/(stepsPerSection*sections*2*Fs*Cp[1:(stepsPerSection*sections*(nrows+1))])
         shellCoefficient2 = -1 - h_s*Tube_vector*SA_ot/(stepsPerSection*sections*2*Fs*Cp[1:(stepsPerSection*sections*(nrows+1))])
         shellCoefficient3 = h_s*Tube_vector*SA_ot/(stepsPerSection*sections*Fs*Cp[1:(stepsPerSection*sections*(nrows+1))])
-        # for (i in 1:(stepsPerSection*sections*(nrows+1))) {
-        #   if (Temp[i] <= Tcond && input$fluid == "vw") {
-        #     shellCoefficient1[i] =  -h_s[i]*Tube_vector[i]*SA_ot/(sections*2*stepsPerSection)
-        #     shellCoefficient2[i] = shellCoefficient1[i]
-        #     shellCoefficient3[i] = h_s[i]*Tube_vector[i]*SA_ot/(sections*stepsPerSection)
-        #     
-        #     rhs_vector[i] = -Mcond[i]*Hvap[i]
-        #   }
-        # }
-        # for (i in 1:(sections*stepsPerSection)) {
-        #   for (j in 0:nrows){
-        #     if (Temp[i+j*stepsPerSection*sections] <= Tcond && input$fluid == "vw") {
-        #       shellCoefficient1[i+j*stepsPerSection*sections] =  -h_s[i+j*stepsPerSection*sections]*Tube_vector[i+j*stepsPerSection*sections]*SA_ot/(sections*stepsPerSection)
-        #       #shellCoefficient2[i+j*stepsPerSection*sections] = shellCoefficient1[i+j*stepsPerSection*sections]
-        #       shellCoefficient2[i+j*stepsPerSection*sections] = 0
-        #       shellCoefficient3[i+j*stepsPerSection*sections] = h_s[i+j*stepsPerSection*sections]*Tube_vector[i+j*stepsPerSection*sections]*SA_ot/(sections*stepsPerSection)
-        #       if (ceiling(i/stepsPerSection) %%2 == 0 && j != nrows) {
-        #         rhs_vector[i+j*stepsPerSection*sections] = -Mcond[i+(j+1)*stepsPerSection*sections]*Hvap[i+(j+1)*stepsPerSection*sections]
-        #       } else if (ceiling(i/stepsPerSection) %%2 == 1 && j != 0) {
-        #         rhs_vector[i+j*stepsPerSection*sections] = -Mcond[i+(j-1)*stepsPerSection*sections]*Hvap[i+(j-1)*stepsPerSection*sections]
-        #       }
-        #     }
-        #   }
-        # }
-        
-        
         tubeCoefficient1 = -1
         tubeCoefficient2 = 1 - h_t*sum(Ntubes_row)*SA_it/(sections*stepsPerSection*input$Ft*Cp[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))])
         tubeCoefficient3 = h_t*sum(Ntubes_row)*SA_it/(sections*stepsPerSection*input$Ft*Cp[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))])
@@ -504,22 +497,10 @@ server = function(input,output,session){
         wallCoefficient2 = wallCoefficient1
         wallCoefficient3 = h_t_extended*SA_it/(h_s*SA_ot + h_t_extended*SA_it)
         wallCoefficient4 = -1
-        # for (i in 1:(sections*stepsPerSection*nrows)) {
-        #   if (ceiling(i/stepsPerSection) %%2 == 1) {
-        #     if (Temp[i] == Tcond && input$fluid == "vw") {
-        #       wallCoefficient1[i] = 0
-        #       wallCoefficient2[i] = 0
-        #       rhs_vector[i+stepsPerSection*sections*(2*nrows+1)] = -h_s[i]*SA_ot*Tcond/((h_s[i]*SA_ot + h_t_extended[i]*SA_it))
-        #     }
-        #   } else {
-        #     if (Temp[i+sections*stepsPerSection] == Tcond && input$fluid == "vw") {
-        #       wallCoefficient1[i] = 0
-        #       wallCoefficient2[i] = 0
-        #       rhs_vector[i+stepsPerSection*sections*(2*nrows+1)] = -h_s[i]*SA_ot*Tcond/((h_s[i]*SA_ot + h_t_extended[i]*SA_it))
-        #     }
-        #   }
-        # }
+
+        # Total condensation 
         
+        # Condensation coefficent adjustments
         if (count %%2 == 0 && input$fluid == "vw") {
           for (i in 1:length(shellCoefficient1)){
             if (Temp[i] <= Tcond) {
@@ -755,6 +736,11 @@ server = function(input,output,session){
                 }
               }
             }
+            
+            # Replace negative Fs with 0
+            Fs[Fs<0] = 0
+            
+            tesFs <<- Fs
             testQ <<- Q_extended
             testcond <<- Mcond
           }
