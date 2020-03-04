@@ -83,8 +83,8 @@ server = function(input,output,session){
       
       # Inital temperature estimate vector
       Temp = c(rep(input$Tsi,times = input$modelsteps),
-                 rep(input$Tti,times = input$modelsteps),
-                 rep(mean(c(input$Tti,input$Tsi)),times = input$modelsteps))
+               rep(input$Tti,times = input$modelsteps),
+               rep(mean(c(input$Tti,input$Tsi)),times = input$modelsteps))
       
       err = 1
       while (err > 0.001) { 
@@ -219,7 +219,7 @@ server = function(input,output,session){
       })
     })
       
-    # Shell and tube with baffles version 2 --------------------------------------------------------------------------------------------  
+      # Shell and tube with baffles version 2 --------------------------------------------------------------------------------------------  
     } else if (input$baffles > 0) {withProgress(value = 0.5, message = "Calculation in progress...",{
       
       # Number of sections seperated by baffles
@@ -433,7 +433,7 @@ server = function(input,output,session){
         # Heat transfer coeffcient
         h_s = Nu_s*K[1:(stepsPerSection*sections*(nrows+1))]/dht
         h_t = Nu_t*K[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]/dht
-
+        
         # Matrix coefficients
         Tube_vector = vector()
         for (i in 1:(nrows+1)) {
@@ -472,7 +472,7 @@ server = function(input,output,session){
         # Replace hs with 0 if Fs is 0
         # h_s[Fs == 0] = 0
         
-
+        
         # Set up a new ht vector and to match hs
         h_t_extended = c(h_t, rep(NA,sections*stepsPerSection))
         for (i in seq(2,sections, by = 2)) {
@@ -497,8 +497,7 @@ server = function(input,output,session){
         wallCoefficient2 = wallCoefficient1
         wallCoefficient3 = h_t_extended*SA_it/(h_s*SA_ot + h_t_extended*SA_it)
         wallCoefficient4 = -1
-
-        # Total condensation 
+        
         
         # Condensation coefficent adjustments
         if (count %%2 == 0 && input$fluid == "vw") {
@@ -531,6 +530,69 @@ server = function(input,output,session){
             rhs_vector[i+stepsPerSection*sections*(nrows+1)] = Temp[i+stepsPerSection*sections*(nrows+1)] 
           }
         }
+        
+        
+        # Coefficent adjustments for total condensation
+        if (count %%2 == 0 && input$fluid == "vw") {
+          for (i in seq(1,sections*stepsPerSection,by = stepsPerSection*2)) {
+            for (j in seq(0,(length(Ntubes_row)-1)*sections*stepsPerSection,by = sections*stepsPerSection)) {
+              for (k in seq(0,stepsPerSection-1)) { 
+                if (Fs[i+j+k] == 0) {
+                  tubeCoefficient2[i+j+k] = 1
+                  tubeCoefficient3[i+j+k] = 0
+                  wallCoefficient1[i+j+k] = 1/4
+                  wallCoefficient2[i+j+k] = 1/4
+                  wallCoefficient3[i+j+k] = 1/2
+                }
+              }
+            }
+          }
+          for (i in seq(1+stepsPerSection+sections*stepsPerSection,sections*stepsPerSection*2,by = stepsPerSection*2)) {
+            for (j in seq(0,(length(Ntubes_row)-1)*sections*stepsPerSection,by = sections*stepsPerSection)) {
+              for (k in seq(0,stepsPerSection-1)) {
+                if (Fs[i+j+k] == 0) {
+                  tubeCoefficient2[i+j+k-sections*stepsPerSection] = 1
+                  tubeCoefficient3[i+j+k-sections*stepsPerSection] = 0
+                  wallCoefficient1[i+j+k] = 1/4
+                  wallCoefficient2[i+j+k] = 1/4
+                  wallCoefficient3[i+j+k] = 1/2
+                }
+              }
+            }
+          }
+        } else if (count %%2 == 1 && input$fluid == "vw") {
+          for (i in seq(1+sections*stepsPerSection,sections*stepsPerSection*2,by = stepsPerSection*2)) {
+            for (j in seq(0,(length(Ntubes_row)-1)*sections*stepsPerSection,by = sections*stepsPerSection)) {
+              for (k in seq(0,stepsPerSection-1)) { 
+                if (Fs[i+j+k] == 0) {
+                  shellCoefficient1[i+j+k-sections*stepsPerSection] = 0
+                  shellCoefficient2[i+j+k-sections*stepsPerSection] = 1
+                  shellCoefficient3[i+j+k-sections*stepsPerSection] = 0
+                  rhs_vector[i+j+k] = Tcond
+                  wallCoefficient1[i+j+k-sections*stepsPerSection] = 1/4
+                  wallCoefficient2[i+j+k-sections*stepsPerSection] = 1/4
+                  wallCoefficient3[i+j+k-sections*stepsPerSection] = 1/2
+                }
+              }
+            }
+          }
+          for (i in seq(1+stepsPerSection,sections*stepsPerSection,by = stepsPerSection*2)) {
+            for (j in seq(0,(length(Ntubes_row)-1)*sections*stepsPerSection,by = sections*stepsPerSection)) {
+              for (k in seq(0,stepsPerSection-1)) {
+                if (Fs[i+j+k] == 0) {
+                  shellCoefficient1[i+j+k+sections*stepsPerSection] = 0
+                  shellCoefficient2[i+j+k+sections*stepsPerSection] = 1
+                  shellCoefficient3[i+j+k+sections*stepsPerSection] = 0
+                  rhs_vector[i+j+k] = Tcond
+                  wallCoefficient1[i+j+k+sections*stepsPerSection] = 1/4
+                  wallCoefficient2[i+j+k+sections*stepsPerSection] = 1/4
+                  wallCoefficient3[i+j+k+sections*stepsPerSection] = 1/2
+                }
+              }
+            }
+          }
+        }
+        
         
         
         # Shell for the shell equation (downward flow)
@@ -647,6 +709,7 @@ server = function(input,output,session){
         }
         Temp = x_vector
         
+        testtemp <<- Temp
         
         # Error calc
         if (count %%2 == 1) {
@@ -739,6 +802,35 @@ server = function(input,output,session){
             
             # Replace negative Fs with 0
             Fs[Fs<0] = 0
+            
+            Fs_old = Fs
+            
+            # Put in Fs = 0 where the flow rate stops changing
+            for (i in seq(1+sections*stepsPerSection,sections*stepsPerSection*2,by = stepsPerSection*2)) {
+              for (j in seq(0,(length(Ntubes_row)-1)*sections*stepsPerSection,by = sections*stepsPerSection)) {
+                for (k in seq(0,stepsPerSection-1)) {
+                  if (Temp[i+j+k] == Temp[i+j+k-sections*stepsPerSection] && Fs_old[i+j+k] == Fs_old[i+j+k-sections*stepsPerSection]) {
+                    Fs[i+j+k] = 0
+                  }
+                }
+              }
+            }
+            for (i in seq(1+stepsPerSection,sections*stepsPerSection,by = stepsPerSection*2)) {
+              for (j in seq(0,(length(Ntubes_row)-1)*sections*stepsPerSection,by = sections*stepsPerSection)) {
+                for (k in seq(0,stepsPerSection-1)) {
+                  if (Temp[i+j+k] == Temp[i+j+k+sections*stepsPerSection] && Fs_old[i+j+k] == Fs_old[i+j+k+sections*stepsPerSection]) {
+                    Fs[i+j+k] = 0
+                  }
+                }
+              }
+            }
+            for (i in seq((stepsPerSection+1),sections*stepsPerSection,by = stepsPerSection)) {
+              if (ceiling(i/stepsPerSection) %% 2 == 1) {
+                Fs[i:(i+stepsPerSection-1)] = mean(Fs[(i-stepsPerSection):(i-1)])
+              } else {
+                Fs[(i+sections*stepsPerSection*nrows):(i+stepsPerSection-1+sections*stepsPerSection*nrows)] = mean(Fs[(i-stepsPerSection+sections*stepsPerSection*nrows):(i-1+sections*stepsPerSection*nrows)])
+              }
+            }
             
             tesFs <<- Fs
             testQ <<- Q_extended
