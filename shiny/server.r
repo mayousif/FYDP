@@ -1,4 +1,5 @@
 server = function(input,output,session){
+  hideElement("slider")
   observeEvent(input$start,{
     
     # Step change (m)
@@ -68,25 +69,38 @@ server = function(input,output,session){
     }
     
     
-    # Double-pipe, no baffles --------------------------------------------------------------------------------------------  
+    # Double-pipe or shell and tube, no baffles --------------------------------------------------------------------------------------------  
     if (input$baffles == 0) {withProgress(value = 0.5, message = "Calculation in progress...",{
       
       # Cross sectional area of the shell (m2)
-      CSA_s = pi/4*(input$sid^2-(input$tid+2*input$tt)^2)
+      CSA_s = pi/4*(input$sid^2-sum(Ntubes_row)*(input$tid+2*input$tt)^2)
       
       # Cross sectional area of the tube (m2)
       CSA_t = pi/4*(input$tid^2)
       
       # Hydraulic diameter shell/pipe
-      dhs = input$sid - (input$tid + input$tt*2)
+      dhs = ((input$sid)^2-sum(Ntubes_row)*(input$tid+2*input$tt)^2)/(input$sid+sum(Ntubes_row)*(input$tid+2*input$tt))
       dht = input$tid
       
       # Inital temperature estimate vector
       Temp = c(rep(input$Tsi,times = input$modelsteps),
                rep(input$Tti,times = input$modelsteps),
                rep(mean(c(input$Tti,input$Tsi)),times = input$modelsteps))
+      SensTempOld = Temp
+      CondTempOld = Temp
+      
+      # Create mass flowrate vector
+      Fs = rep(input$Fs,input$modelsteps)
+      
+      # Create condensed mass vector
+      Mcond = rep(0,input$modelsteps)
+      
+      # Create RH vector
+      RH = rep(input$RH,input$modelsteps)
+      
       
       err = 1
+      count = 1
       while (err > 0.001) { 
         # Create matrix containing all calclated temp values
         T_matrix = matrix(data = 0, ncol = input$modelsteps*3,nrow = input$modelsteps*3)
@@ -98,8 +112,8 @@ server = function(input,output,session){
         K = k_lw(Temp)
         
         # Reynolds #
-        vs = input$Fs/(Dens[1:input$modelsteps]*CSA_s)
-        vt = input$Ft/(Dens[(input$modelsteps+1):(2*input$modelsteps)]*CSA_t)
+        vs = Fs/(Dens[1:input$modelsteps]*CSA_s)
+        vt = input$Ft/(Dens[(input$modelsteps+1):(2*input$modelsteps)]*CSA_t*sum(Ntubes_row))
         Re_s = Dens[1:input$modelsteps]*dhs*vs/Mu[1:input$modelsteps]
         Re_t = Dens[(input$modelsteps+1):(2*input$modelsteps)]*dht*vt/Mu[(input$modelsteps+1):(2*input$modelsteps)]
         
@@ -134,16 +148,16 @@ server = function(input,output,session){
         T_matrix[1,1] = 1
         for (i in 2:input$modelsteps){
           T_matrix[i,i] = 1
-          T_matrix[i,i-1] = -1 + h_s[i-1]*SA_ot*dz/(input$L*input$Fs*Cp[i-1])
-          T_matrix[i,i-1+2*input$modelsteps] = -h_s[i-1]*SA_ot*dz/(input$L*input$Fs*Cp[i-1])
+          T_matrix[i,i-1] = -1 + sum(Ntubes_row)*h_s[i-1]*SA_ot*dz/(input$L*input$Fs*Cp[i-1])
+          T_matrix[i,i-1+2*input$modelsteps] = -sum(Ntubes_row)*h_s[i-1]*SA_ot*dz/(input$L*input$Fs*Cp[i-1])
         }
         
         # Insert coefficents for tube
         T_matrix[2*input$modelsteps,2*input$modelsteps] = 1
         for (i in (input$modelsteps+1):(2*input$modelsteps-1)) {
           T_matrix[i,i] = 1
-          T_matrix[i,i+1] = -1 + h_t[i+1-input$modelsteps]*SA_it*dz/(input$L*input$Ft*Cp[i+1])
-          T_matrix[i,i+1+input$modelsteps] = -h_t[i+1-input$modelsteps]*SA_it*dz/(input$L*input$Ft*Cp[i+1])
+          T_matrix[i,i+1] = -1 + sum(Ntubes_row)*h_t[i+1-input$modelsteps]*SA_it*dz/(input$L*input$Ft*Cp[i+1])
+          T_matrix[i,i+1+input$modelsteps] = -sum(Ntubes_row)*h_t[i+1-input$modelsteps]*SA_it*dz/(input$L*input$Ft*Cp[i+1])
         }
         
         # Insert coefficents for wall
@@ -167,33 +181,39 @@ server = function(input,output,session){
       }
       
       # Initialize heatmap data matrix without baffle columns
-      heatmapdata = matrix(ncol = input$modelsteps, nrow = 3)
+      heatmapdata = matrix(ncol = input$modelsteps, nrow = 2*length(Ntubes_row)+1)
       
-      heatmapdata[1,1:input$modelsteps] = x_vector[1:input$modelsteps]
-      heatmapdata[2,1:input$modelsteps] = x_vector[(input$modelsteps+1):(2*input$modelsteps)]
-      heatmapdata[3,1:input$modelsteps] = x_vector[1:input$modelsteps]
+      for (i in 1:(2*length(Ntubes_row)+1)) {
+        if (i %% 2 == 0) {
+          heatmapdata[i,1:input$modelsteps] = x_vector[(input$modelsteps+1):(2*input$modelsteps)]
+        } else {
+          heatmapdata[i,1:input$modelsteps] = x_vector[1:input$modelsteps]        
+        }
+      }
+
       
+      tubelines = list()
       # Create border lines for tubes in heatmap
-      tubelines = list(
-        list(type = 'line', xref = "x", yref = "y",
-             x0 = -0.5, x1 = input$modelsteps-0.5,
-             y0 = 1.5, y1 = 1.5,
-             line = list(color = "black", width = 10)
-        ),
-        list(type = 'line', xref = "x", yref = "y",
-             x0 = -0.5, x1 = input$modelsteps-0.5,
-             y0 = 0.5, y1 = 0.5,
-             line = list(color = "black", width = 10)
+      for (i in 1:(2*length(Ntubes_row))) {
+        tubelines = c(tubelines,
+                      list(list(type = 'line', xref = "x", yref = "y",
+                                x0 = -0.5, x1 = input$modelsteps-0.5,
+                                y0 = i-0.5, y1 = i-0.5,
+                                line = list(color = "black", width = 10)
+                      )
+                      )
         )
-      )
+      }
+
+      heatmaptext = list()
+      for (i in 1:nrow(heatmapdata)) {
+        heatmaptext[[i]] = paste(round(heatmapdata[i,1:input$modelsteps],digits = 2), "K", sep = " ")
+      }
       
       # Create plot and output
       output$plot1 = renderPlotly({
         plot_ly(z = heatmapdata, type = "heatmap", hoverinfo = 'text', 
-                text = list(paste(round(heatmapdata[1,1:(input$modelsteps)],digits = 2), "K", sep = " "),
-                            paste(round(heatmapdata[2,1:(input$modelsteps)],digits = 2), "K", sep = " "),
-                            paste(round(heatmapdata[3,1:(input$modelsteps)],digits = 2), "K", sep = " ")
-                ),
+                text = heatmaptext,
                 colorscale = "RdBu", 
                 colorbar = list(len = 1, title = list(text = "Temperature (K)",side = "right"))) %>%
           config(displayModeBar = F) %>%
@@ -219,7 +239,7 @@ server = function(input,output,session){
       })
     })
       
-      # Shell and tube with baffles version 2 --------------------------------------------------------------------------------------------  
+      # Double-pipe and shell and tube with baffles version 2 --------------------------------------------------------------------------------------------  
     } else if (input$baffles > 0) {withProgress(value = 0.5, message = "Calculation in progress...",{
       
       # Number of sections seperated by baffles
@@ -231,16 +251,19 @@ server = function(input,output,session){
       # Cross sectional area of the tube (m2)
       CSA_t = pi/4*(input$tid^2)
       
-      # Hydraulic diameter pipe
+      # Hydraulic diameter tube
       dht = input$tid
       
-      # Calculate space between tubes
-      pitch_x = input$sid/max(Ntubes_row)
+      # Calculate space between tubes (half a space on either side)
       pitch_y = input$sid/(length(Ntubes_row))
       
       # Chord length and cross-sectional area of shell per row
       chord_length = 2*sqrt(2*pitch_y*((1:length(Ntubes_row))-0.5)*input$sid/2 - (pitch_y*((1:length(Ntubes_row))-0.5))^2)
       CSA_s = c(chord_length*input$L/(sections*stepsPerSection),0)
+      
+      # Calculate space between tubes (half a space on either side)
+      maxrowindex = match(max(Ntubes_row),Ntubes_row)
+      pitch_x = min(chord_length[Ntubes_row %in% max(Ntubes_row)])/max(Ntubes_row)
       
       CSA_s_vector = vector()
       for (i in 1:length(CSA_s)) {
@@ -344,13 +367,13 @@ server = function(input,output,session){
         
         vs_max = vs*pitch_x/(pitch_x-(input$tid + 2*input$tt))
         
-        if (input$config == "triangle" && pitch_x >= input$tid + 2*input$tt + 2*(sqrt((pitch_x/2)^2 + pitch_y^2) - input$tid - 2*input$tt)) {
+        if (input$config == "triangle" && pitch_x > input$tid + 2*input$tt + 2*(sqrt((pitch_x/2)^2 + pitch_y^2) - input$tid - 2*input$tt)) {
           pitch_diag = sqrt((pitch_x/2)^2 + pitch_y^2)
           vs_max = pitch_x/2*vs/(pitch_diag - input$tid - 2*input$tt)
         } 
-        Re_s = Dens[1:(stepsPerSection*sections*(nrows+1))]*dht*vs_max/Mu[1:(stepsPerSection*sections*(nrows+1))]
+        Re_s = Dens[1:(stepsPerSection*sections*(nrows+1))]*(dht+2*input$tt)*vs_max/Mu[1:(stepsPerSection*sections*(nrows+1))]
         Re_t = Dens[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]*dht*vt/Mu[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]
-        Re_d = Dens[1:(stepsPerSection*sections*(nrows+1))]*dht*vs/Mu[1:(stepsPerSection*sections*(nrows+1))]
+        Re_d = Dens[1:(stepsPerSection*sections*(nrows+1))]*(dht+2*input$tt)*vs/Mu[1:(stepsPerSection*sections*(nrows+1))]
         
         
         # Prandtl #
@@ -370,8 +393,7 @@ server = function(input,output,session){
             }
           }
         }
-        
-        
+
         # Graetz #
         Gz_t = dht/input$L*Re_t*Pr_t
         
@@ -431,7 +453,7 @@ server = function(input,output,session){
         }
         
         # Heat transfer coeffcient
-        h_s = Nu_s*K[1:(stepsPerSection*sections*(nrows+1))]/dht
+        h_s = Nu_s*K[1:(stepsPerSection*sections*(nrows+1))]/(dht+2*input$tt)
         h_t = Nu_t*K[(stepsPerSection*sections*(nrows+1)+1):(stepsPerSection*sections*(2*nrows+1))]/dht
         
         # Matrix coefficients
@@ -445,13 +467,13 @@ server = function(input,output,session){
             }
           }
         }
-        
+
         # Replace hs with film hs if condensation occurs
         for (i in seq(1,sections*stepsPerSection,by = stepsPerSection*2)) {
           for (j in seq(0,(length(Ntubes_row)-1)*sections*stepsPerSection,by = sections*stepsPerSection)) {
             for (k in seq(0,stepsPerSection-1)) { 
-              if (count %%2 == 0 && Temp[i+j+k] <= Tcond) {
-                h_s[(i+j+k)] = 0.943*((k_lw(Tcond)^3*dens_lw(Tcond)^2*9.81*Hvap[i])/(mu_lw(Tcond)*(input$tid+2*input$tt)*(Tcond-Temp[(i+j+k+stepsPerSection*sections*(2*nrows+1))])))^0.25*(0.6+0.42*Tube_vector[i]^-0.25)
+              if (count %%2 == 0 && Temp[i+j+k] <= Tcond && input$fluid == "vw") {
+                h_s[(i+j+k)] = 0.943*((k_lw(Tcond)^3*dens_lw(Tcond)^2*9.81*Hvap[i+j+k])/(mu_lw(Tcond)*(input$tid+2*input$tt)*(Tcond-Temp[(i+j+k+stepsPerSection*sections*(2*nrows+1))])))^0.25*(0.6+0.42*Tube_vector[i+j+k]^-0.25)
               }
             }
           }
@@ -459,8 +481,8 @@ server = function(input,output,session){
         for (i in seq(1+stepsPerSection+sections*stepsPerSection,sections*stepsPerSection*2,by = stepsPerSection*2)) {
           for (j in seq(0,(length(Ntubes_row)-1)*sections*stepsPerSection,by = sections*stepsPerSection)) {
             for (k in seq(0,stepsPerSection-1)) {
-              if (count %%2 == 0 && Temp[i+j+k] <= Tcond) {
-                h_s[(i+j+k)] = 0.943*((k_lw(Tcond)^3*dens_lw(Tcond)^2*9.81*Hvap[i])/(mu_lw(Tcond)*(input$tid+2*input$tt)*(Tcond-Temp[(i+j+k+stepsPerSection*sections*(2*nrows))])))^0.25*(0.6+0.42*Tube_vector[i]^-0.25)
+              if (count %%2 == 0 && Temp[i+j+k] <= Tcond && input$fluid == "vw") {
+                h_s[(i+j+k)] = 0.943*((k_lw(Tcond)^3*dens_lw(Tcond)^2*9.81*Hvap[i+j+k])/(mu_lw(Tcond)*(input$tid+2*input$tt)*(Tcond-Temp[(i+j+k+stepsPerSection*sections*(2*nrows))])))^0.25*(0.6+0.42*Tube_vector[i+j+k]^-0.25)
               }
             }
           }
@@ -468,10 +490,7 @@ server = function(input,output,session){
         
         
         tesths <<- h_s
-        
-        # Replace hs with 0 if Fs is 0
-        # h_s[Fs == 0] = 0
-        
+
         
         # Set up a new ht vector and to match hs
         h_t_extended = c(h_t, rep(NA,sections*stepsPerSection))
@@ -533,6 +552,7 @@ server = function(input,output,session){
         
         
         # Coefficent adjustments for total condensation
+        # Downward condensation
         if (count %%2 == 0 && input$fluid == "vw") {
           for (i in seq(1,sections*stepsPerSection,by = stepsPerSection*2)) {
             for (j in seq(0,(length(Ntubes_row)-1)*sections*stepsPerSection,by = sections*stepsPerSection)) {
@@ -547,6 +567,7 @@ server = function(input,output,session){
               }
             }
           }
+          # Upward condensation
           for (i in seq(1+stepsPerSection+sections*stepsPerSection,sections*stepsPerSection*2,by = stepsPerSection*2)) {
             for (j in seq(0,(length(Ntubes_row)-1)*sections*stepsPerSection,by = sections*stepsPerSection)) {
               for (k in seq(0,stepsPerSection-1)) {
@@ -560,6 +581,7 @@ server = function(input,output,session){
               }
             }
           }
+          # Downward sensible
         } else if (count %%2 == 1 && input$fluid == "vw") {
           for (i in seq(1+sections*stepsPerSection,sections*stepsPerSection*2,by = stepsPerSection*2)) {
             for (j in seq(0,(length(Ntubes_row)-1)*sections*stepsPerSection,by = sections*stepsPerSection)) {
@@ -576,6 +598,7 @@ server = function(input,output,session){
               }
             }
           }
+          # Upward sensible
           for (i in seq(1+stepsPerSection,sections*stepsPerSection,by = stepsPerSection*2)) {
             for (j in seq(0,(length(Ntubes_row)-1)*sections*stepsPerSection,by = sections*stepsPerSection)) {
               for (k in seq(0,stepsPerSection-1)) {
@@ -861,7 +884,7 @@ server = function(input,output,session){
       }
       
       
-      heatmapdata = heatmapdata # save as global variable for debugging
+      heatmapdata <<- heatmapdata # save as global variable for debugging
       
       tubelines = list()
       # Create border lines for tubes in heatmap
@@ -909,7 +932,7 @@ server = function(input,output,session){
       output$plot1 = renderPlotly({
         plot_ly(z = heatmapdata, type = "heatmap", hoverinfo = 'text', 
                 text = heatmaptext,
-                colorscale = "RdBu", 
+                colorscale = list(c(0, "rgb(0, 0, 255)"), list(1, "rgb(255, 0, 0)")), 
                 colorbar = list(len = 1, title = list(text = "Temperature (K)",side = "right"))) %>%
           config(displayModeBar = F) %>%
           layout(
@@ -932,7 +955,105 @@ server = function(input,output,session){
             )
           )
       })
+      
+      
+      # Set-up and output circle plot
+      output$plot2 =  renderPlotly({
+        x = seq(-1,1,1/100)
+        circlefun = function(x) {
+          
+          y = sqrt(1-x^2)
+          return(y)
+        }
+        y = circlefun(x)
+        
+        x = c(x,rev(x))
+        y = c(y,-y)
+        
+        
+        normpitchx = pitch_x/(input$sid/2)
+        normpitchy = pitch_y/(input$sid/2)
+        
+        
+        ypos = c(seq(-1+0.5*normpitchy,-1+(nrows-0.5)*normpitchy,normpitchy),1)
+        
+        
+        plot2 = plot_ly(type = "scatter", mode = "lines", showlegend = F) %>%
+          add_trace(x = c(-1,1), y = c(-1,-1), line = list(color = "rgba(0,0,0,0)")) %>%
+          config(displayModeBar = F) %>%
+          layout(
+            xaxis = list(
+              zeroline = FALSE,
+              showline = FALSE,
+              showticklabels = FALSE,
+              showgrid = FALSE,
+              range = c(-1.1,1.1)
+            ),
+            yaxis = list(
+              zeroline = FALSE,
+              showline = FALSE,
+              showticklabels = FALSE,
+              showgrid = FALSE,
+              range = c(-1.1,1.1)
+            ),
+            paper_bgcolor = "rgba(0,0,0,0)",
+            plot_bgcolor = "rgba(0,0,0,0)"
+          )
+        
+        
+        shellcolorvalues = round(heatmapdata[seq(1,2*nrows+1,2),]) - floor(min(heatmapdata)) + 1
+        tubecolorvalues = round(heatmapdata[seq(2,2*nrows,2),]) - floor(min(heatmapdata)) + 1
+        colorrange = colorRampPalette(c("#0000ff","#ff0000")) (ceiling(max(heatmapdata))-floor(min(heatmapdata)) + 1)
+        
+        for (i in 1:(nrows+1)) {
+          plot2 = add_trace(plot2,type = "scatter", mode = "lines",x = c(-1,1),y = c(ypos[i],ypos[i]), 
+                            fill = "tonextx", fillcolor = colorrange[shellcolorvalues[i,round(input$slider*sections*stepsPerSection/input$L)]], line = list(color = "rgba(0,0,0,0)"))
+        }
+        
+        plot2 = add_trace(plot2,x = x*2, y = y*2)
+        plot2 = add_trace(plot2,x = x, y = y, fill = "tonextx", fillcolor = "#E2E2E2", line = list(color = "black"))
+  
+        normchord = chord_length/(input$sid/2)
+        normtid = input$tid/(input$sid)*454 # 454px is width of the shell in our plot 
+        
+        if (input$config == "square"){
+          if (sum(Ntubes_row %%2) == 0 || sum(Ntubes_row %%2) == nrows) {
+            xpos = seq(-min(normchord[Ntubes_row %in% max(Ntubes_row)])/2 + 0.5*normpitchx,min(normchord[Ntubes_row %in% max(Ntubes_row)])/2 - 0.5*normpitchx,normpitchx)
+            for (i in 1:nrows) {
+              if (length(xpos) == Ntubes_row[i]) {
+                xposi = xpos
+              } else{
+                xposi = xpos[-c((1:(max(Ntubes_row)-Ntubes_row[i])/2),length(xpos):(length(xpos)-(max(Ntubes_row)-Ntubes_row[i])/2 + 1))]
+              }
+              plot2 = add_trace(plot2, mode = "markers", x = xposi, y = rep(ypos[i],Ntubes_row[i]),
+                                marker = list(size = normtid, line = list(color = "black",width = 2),
+                                              color = colorrange[rep(tubecolorvalues[i,round(input$slider*sections*stepsPerSection/input$L)],Ntubes_row[i])]))
+            }
+            
+          } else {
+            
+          }
+          
+          
+        } else {
+          
+          
+        }
+        plot2
+      })
+      
+      # Update slider bar
+      updateSliderInput(session, "slider", min = input$L/(sections*stepsPerSection), max = input$L, label = "X-Position (m)",
+                        step = input$L/(sections*stepsPerSection), value = input$L/(sections*stepsPerSection))
+      showElement("slider")
+
+
+
     })
     }
   })
+  observeEvent(input$slider,{
+
+  })
+  
 }

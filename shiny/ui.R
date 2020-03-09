@@ -30,7 +30,6 @@ ui = fluidPage(title = "HX Modelling", shinyjs::useShinyjs(),
                       numericInput("sid", HTML("Shell Inner Diameter (m)"),"", value = 0.1),
                       numericInput("st", HTML("Shell Thickness (m)"),"", value = 1),
                       numericInput("L", HTML("Pipe Length (m)"),"", value = 1),
-                      #numericInput("ntubes", HTML("Number of Tubes"),"", value = 1),
                       radioButtons("config", label = HTML("Tube configuration"),
                                    choices = list("In-line" = "square", "Staggered" = "triangle"), 
                                    selected = "square"),
@@ -42,9 +41,18 @@ ui = fluidPage(title = "HX Modelling", shinyjs::useShinyjs(),
                )
              ),
              fluidRow(
-               column(12,align = "center",
+               column(4,align = "center",
+                      plotlyOutput("plot2",width = "500px", height = "500px")
+               ),
+               column(8,align = "center", 
                       actionButton("start", "Start"),
-                      plotlyOutput("plot1")
+                      plotlyOutput("plot1",height = "440px")
+               )
+             ),
+             fluidRow(
+               column(4,align = "center", 
+                      sliderInput("slider", min = NA, max = NA, value = NA, label = "",round = -3, width = "550px")
+                      
                )
              )
     )
