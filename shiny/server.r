@@ -919,9 +919,9 @@ server = function(input,output,session){
         }
         lines = c(lines, list(baffleline))
       }
-      
+
       lines = c(lines,tubelines)
-      
+
       heatmaptext = list()
       for (i in 1:nrow(heatmapdata)) {
         heatmaptext[[i]] = paste(round(heatmapdata[i,1:(sections*stepsPerSection)],digits = 2), "K", sep = " ")
@@ -930,13 +930,27 @@ server = function(input,output,session){
       
       # Create plot and output
       output$plot1 = renderPlotly({
+        
+        
+        csline = list(
+          type = "line",
+          line = list(width = 5,dash="dashdot", color = "white"),
+          xref = "x",
+          yref = "y",
+          x0 = round(input$slider*sections*stepsPerSection/(0.5*input$L))/2-0.5,
+          x1 = round(input$slider*sections*stepsPerSection/(0.5*input$L))/2-0.5,
+          y0 = -1,
+          y1 = 2*nrows +1
+        )
+        
+        
         plot_ly(z = heatmapdata, type = "heatmap", hoverinfo = 'text', 
                 text = heatmaptext,
                 colorscale = list(c(0, "rgb(0, 0, 255)"), list(1, "rgb(255, 0, 0)")), 
                 colorbar = list(len = 1, title = list(text = "Temperature (K)",side = "right"))) %>%
           config(displayModeBar = F) %>%
           layout(
-            shapes = lines,
+            shapes = c(lines,list(csline)),
             paper_bgcolor='rgba(0,0,0,0)',
             plot_bgcolor='rgba(0,0,0,0)',
             xaxis = list(
@@ -1007,7 +1021,7 @@ server = function(input,output,session){
         
         for (i in 1:(nrows+1)) {
           plot2 = add_trace(plot2,type = "scatter", mode = "lines",x = c(-1,1),y = c(ypos[i],ypos[i]), 
-                            fill = "tonextx", fillcolor = colorrange[shellcolorvalues[i,round(input$slider*sections*stepsPerSection/input$L)]], line = list(color = "rgba(0,0,0,0)"))
+                            fill = "tonextx", fillcolor = colorrange[shellcolorvalues[i,round(input$slider*sections*stepsPerSection/(0.5*input$L))/2+0.5]], line = list(color = "rgba(0,0,0,0)"))
         }
         
         plot2 = add_trace(plot2,x = x*2, y = y*2)
@@ -1027,7 +1041,7 @@ server = function(input,output,session){
               }
               plot2 = add_trace(plot2, mode = "markers", x = xposi, y = rep(ypos[i],Ntubes_row[i]),
                                 marker = list(size = normtid, line = list(color = "black",width = 2),
-                                              color = colorrange[rep(tubecolorvalues[i,round(input$slider*sections*stepsPerSection/input$L)],Ntubes_row[i])]))
+                                              color = colorrange[rep(tubecolorvalues[i,round(input$slider*sections*stepsPerSection/(0.5*input$L))/2+0.5],Ntubes_row[i])]))
             }
             
           } else {
@@ -1036,17 +1050,43 @@ server = function(input,output,session){
           
           
         } else {
-          
+          if (sum(Ntubes_row %%2) == (nrows/2 + 0.5) || sum(Ntubes_row %%2) == (nrows/2 - 0.5)) {
+            # x positions of rows alligned with largest row
+            xpos1 = seq(-min(normchord[Ntubes_row %in% max(Ntubes_row)])/2 + 0.5*normpitchx,min(normchord[Ntubes_row %in% max(Ntubes_row)])/2 - 0.5*normpitchx,normpitchx)
+            
+            # x positions of rows not alligned with largest row
+            xpos2 = xpos1[-1] - normpitchx/2
+            
+            for (i in 1:nrows) {
+              if (length(xpos1) == Ntubes_row[i]) {
+                xposi = xpos1
+              } else if (abs(i-length(Ntubes_row)/2 + 0.5) %%2) {
+                xposi = xpos1[-c((1:(max(Ntubes_row)-Ntubes_row[i])/2),length(xpos1):(length(xpos1)-(max(Ntubes_row)-Ntubes_row[i])/2 + 1))]
+              } else if (length(xpos2) == Ntubes_row[i]) {
+                xposi = xpos2
+              } else {
+                xposi = xpos2[-c((1:(max(Ntubes_row)-1-Ntubes_row[i])/2),length(xpos2):(length(xpos2)-(max(Ntubes_row)-1-Ntubes_row[i])/2 + 1))]
+              }
+              plot2 = add_trace(plot2, mode = "markers", x = xposi, y = rep(ypos[i],Ntubes_row[i]),
+                                marker = list(size = normtid, line = list(color = "black",width = 2),
+                                              color = colorrange[rep(tubecolorvalues[i,round(input$slider*sections*stepsPerSection/(0.5*input$L))/2+0.5],Ntubes_row[i])]))
+            }
+            
+          } else {
+            
+          }
           
         }
         plot2
+        
+        
+        
       })
       
       # Update slider bar
-      updateSliderInput(session, "slider", min = input$L/(sections*stepsPerSection), max = input$L, label = "X-Position (m)",
-                        step = input$L/(sections*stepsPerSection), value = input$L/(sections*stepsPerSection))
+      updateSliderInput(session, "slider", min = 0.5*input$L/(sections*stepsPerSection) , max = input$L-0.5*input$L/(sections*stepsPerSection), label = "X-Position (m)",
+                        step = input$L/(sections*stepsPerSection), value = 0.5*input$L/(sections*stepsPerSection))
       showElement("slider")
-
 
 
     })
