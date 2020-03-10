@@ -1,5 +1,6 @@
 server = function(input,output,session){
   hideElement("slider")
+  hideTab("tabs","Output")
   observeEvent(input$start,{
     
     # Step change (m)
@@ -190,7 +191,7 @@ server = function(input,output,session){
           heatmapdata[i,1:input$modelsteps] = x_vector[1:input$modelsteps]        
         }
       }
-
+      
       
       tubelines = list()
       # Create border lines for tubes in heatmap
@@ -204,7 +205,7 @@ server = function(input,output,session){
                       )
         )
       }
-
+      
       heatmaptext = list()
       for (i in 1:nrow(heatmapdata)) {
         heatmaptext[[i]] = paste(round(heatmapdata[i,1:input$modelsteps],digits = 2), "K", sep = " ")
@@ -393,7 +394,7 @@ server = function(input,output,session){
             }
           }
         }
-
+        
         # Graetz #
         Gz_t = dht/input$L*Re_t*Pr_t
         
@@ -467,7 +468,7 @@ server = function(input,output,session){
             }
           }
         }
-
+        
         # Replace hs with film hs if condensation occurs
         for (i in seq(1,sections*stepsPerSection,by = stepsPerSection*2)) {
           for (j in seq(0,(length(Ntubes_row)-1)*sections*stepsPerSection,by = sections*stepsPerSection)) {
@@ -490,7 +491,7 @@ server = function(input,output,session){
         
         
         tesths <<- h_s
-
+        
         
         # Set up a new ht vector and to match hs
         h_t_extended = c(h_t, rep(NA,sections*stepsPerSection))
@@ -776,11 +777,17 @@ server = function(input,output,session){
             }
             Q_extended = Q_extended*Tube_vector
             
-            for (i in 1:(stepsPerSection*sections*(nrows+1))) {
-              if (Temp[i] <= Tcond && input$fluid == "vw") {
-                Mcond[i] = Q_extended[i]/Hvap[i]
-              } else {
-                Mcond[i] = 0
+            for (i in 1:(stepsPerSection*sections)) {
+              for (j in seq(0,(nrows-1)*sections*stepsPerSection, by = sections*stepsPerSection)) {
+                if (ceiling(i/stepsPerSection) %%2 == 1 && Temp[i+j] <= Tcond && input$fluid == "vw") {
+                  Mcond[i+j] = Q_extended[i+j]/(Hvap[i+j]+cp_lw((Tcond+Temp[i+j+(2*nrows+1)*sections*stepsPerSection])/2)*(Tcond-Temp[i+j+(2*nrows+1)*sections*stepsPerSection]))
+                } else if (ceiling(i/stepsPerSection) %%2 == 0 && Temp[i+j+sections*stepsPerSection] <= Tcond && input$fluid == "vw") {
+                  Mcond[i+j+sections*stepsPerSection] = Q_extended[i+j+sections*stepsPerSection]/(Hvap[i+j+sections*stepsPerSection]+cp_lw((Tcond+Temp[i+j+(2*nrows+1)*sections*stepsPerSection])/2)*(Tcond-Temp[i+j+(2*nrows+1)*sections*stepsPerSection]))
+                } else if (ceiling(i/stepsPerSection) %%2 == 1) {
+                  Mcond[i+j] = 0
+                } else {
+                  Mcond[i+j+sections*stepsPerSection] = 0
+                }
               }
             }
             
@@ -807,7 +814,17 @@ server = function(input,output,session){
                   } else {
                     Fs[((i-1)*stepsPerSection+1+(k-1)*stepsPerSection*sections):(i*stepsPerSection+(k-1)*stepsPerSection*sections)] = 
                       Fs[((i-1)*stepsPerSection +1+k*stepsPerSection*sections):(i*stepsPerSection+k*stepsPerSection*sections)] -
-                      Mcond[((i-1)*stepsPerSection +1+k*stepsPerSection*sections):(i*stepsPerSection+k*stepsPerSection*sections)] 
+                      Mcond[((i-1)*stepsPerSection +1+k*stepsPerSection*sections):(i*stepsPerSection+k*stepsPerSection*sections)]
+                    if (any(Fs[((i-1)*stepsPerSection+1+(k-1)*stepsPerSection*sections):(i*stepsPerSection+(k-1)*stepsPerSection*sections)] < 0)) {
+                      nuggets = sum(Fs[((i-1)*stepsPerSection +1+k*stepsPerSection*sections):(i*stepsPerSection+k*stepsPerSection*sections)])/stepsPerSection
+                      Mcond[((i-1)*stepsPerSection +1+k*stepsPerSection*sections):(i*stepsPerSection+k*stepsPerSection*sections)] = nuggets
+                      Fs[((i-1)*stepsPerSection+1+(k-1)*stepsPerSection*sections):(i*stepsPerSection+(k-1)*stepsPerSection*sections)] = 
+                        Fs[((i-1)*stepsPerSection +1+k*stepsPerSection*sections):(i*stepsPerSection+k*stepsPerSection*sections)] -
+                        Mcond[((i-1)*stepsPerSection +1+k*stepsPerSection*sections):(i*stepsPerSection+k*stepsPerSection*sections)]
+                      
+                    }
+                    
+                    
                   }
                 } else {
                   if (j == 1 && i != 1){
@@ -818,6 +835,14 @@ server = function(input,output,session){
                     Fs[((i-1)*stepsPerSection +1+(j-1)*stepsPerSection*sections):(i*stepsPerSection+(j-1)*stepsPerSection*sections)] = 
                       Fs[((i-1)*stepsPerSection +1+(j-2)*stepsPerSection*sections):(i*stepsPerSection+(j-2)*stepsPerSection*sections)] -
                       Mcond[((i-1)*stepsPerSection +1+(j-2)*stepsPerSection*sections):(i*stepsPerSection+(j-2)*stepsPerSection*sections)] 
+                    if (any(Fs[((i-1)*stepsPerSection +1+(j-1)*stepsPerSection*sections):(i*stepsPerSection+(j-1)*stepsPerSection*sections)] <0)) {
+                      nuggets = sum(Fs[((i-1)*stepsPerSection +1+(j-2)*stepsPerSection*sections):(i*stepsPerSection+(j-2)*stepsPerSection*sections)])/stepsPerSection
+                      Mcond[((i-1)*stepsPerSection +1+(j-2)*stepsPerSection*sections):(i*stepsPerSection+(j-2)*stepsPerSection*sections)] = nuggets
+                      Fs[((i-1)*stepsPerSection +1+(j-1)*stepsPerSection*sections):(i*stepsPerSection+(j-1)*stepsPerSection*sections)] = 
+                        Fs[((i-1)*stepsPerSection +1+(j-2)*stepsPerSection*sections):(i*stepsPerSection+(j-2)*stepsPerSection*sections)] -
+                        Mcond[((i-1)*stepsPerSection +1+(j-2)*stepsPerSection*sections):(i*stepsPerSection+(j-2)*stepsPerSection*sections)] 
+                      
+                    }
                   }
                 }
               }
@@ -884,7 +909,7 @@ server = function(input,output,session){
       }
       
       
-      heatmapdata <<- heatmapdata # save as global variable for debugging
+      heatmapdata = heatmapdata # save as global variable for debugging
       
       tubelines = list()
       # Create border lines for tubes in heatmap
@@ -919,9 +944,9 @@ server = function(input,output,session){
         }
         lines = c(lines, list(baffleline))
       }
-
+      
       lines = c(lines,tubelines)
-
+      
       heatmaptext = list()
       for (i in 1:nrow(heatmapdata)) {
         heatmaptext[[i]] = paste(round(heatmapdata[i,1:(sections*stepsPerSection)],digits = 2), "K", sep = " ")
@@ -937,8 +962,8 @@ server = function(input,output,session){
           line = list(width = 5,dash="dashdot", color = "white"),
           xref = "x",
           yref = "y",
-          x0 = round(input$slider*sections*stepsPerSection/(0.5*input$L))/2-0.5,
-          x1 = round(input$slider*sections*stepsPerSection/(0.5*input$L))/2-0.5,
+          x0 = (input$slider/(0.5*input$L/(sections*stepsPerSection))-1)/2,
+          x1 = (input$slider/(0.5*input$L/(sections*stepsPerSection))-1)/2,
           y0 = -1,
           y1 = 2*nrows +1
         )
@@ -1021,12 +1046,12 @@ server = function(input,output,session){
         
         for (i in 1:(nrows+1)) {
           plot2 = add_trace(plot2,type = "scatter", mode = "lines",x = c(-1,1),y = c(ypos[i],ypos[i]), 
-                            fill = "tonextx", fillcolor = colorrange[shellcolorvalues[i,round(input$slider*sections*stepsPerSection/(0.5*input$L))/2+0.5]], line = list(color = "rgba(0,0,0,0)"))
+                            fill = "tonextx", fillcolor = colorrange[shellcolorvalues[i,input$slider/(0.5*input$L/(sections*stepsPerSection))/2+0.5]], line = list(color = "rgba(0,0,0,0)"))
         }
         
         plot2 = add_trace(plot2,x = x*2, y = y*2)
         plot2 = add_trace(plot2,x = x, y = y, fill = "tonextx", fillcolor = "#E2E2E2", line = list(color = "black"))
-  
+        
         normchord = chord_length/(input$sid/2)
         normtid = input$tid/(input$sid)*454 # 454px is width of the shell in our plot 
         
@@ -1041,7 +1066,7 @@ server = function(input,output,session){
               }
               plot2 = add_trace(plot2, mode = "markers", x = xposi, y = rep(ypos[i],Ntubes_row[i]),
                                 marker = list(size = normtid, line = list(color = "black",width = 2),
-                                              color = colorrange[rep(tubecolorvalues[i,round(input$slider*sections*stepsPerSection/(0.5*input$L))/2+0.5],Ntubes_row[i])]))
+                                              color = colorrange[rep(tubecolorvalues[i,input$slider/(0.5*input$L/(sections*stepsPerSection))/2+0.5],Ntubes_row[i])]))
             }
             
           } else {
@@ -1069,7 +1094,7 @@ server = function(input,output,session){
               }
               plot2 = add_trace(plot2, mode = "markers", x = xposi, y = rep(ypos[i],Ntubes_row[i]),
                                 marker = list(size = normtid, line = list(color = "black",width = 2),
-                                              color = colorrange[rep(tubecolorvalues[i,round(input$slider*sections*stepsPerSection/(0.5*input$L))/2+0.5],Ntubes_row[i])]))
+                                              color = colorrange[rep(tubecolorvalues[i,input$slider/(0.5*input$L/(sections*stepsPerSection))/2+0.5],Ntubes_row[i])]))
             }
             
           } else {
@@ -1085,15 +1110,58 @@ server = function(input,output,session){
       
       # Update slider bar
       updateSliderInput(session, "slider", min = 0.5*input$L/(sections*stepsPerSection) , max = input$L-0.5*input$L/(sections*stepsPerSection), label = "X-Position (m)",
-                        step = input$L/(sections*stepsPerSection), value = 0.5*input$L/(sections*stepsPerSection))
+                        step = 0.5*input$L/(sections*stepsPerSection), value = 0.5*input$L/(sections*stepsPerSection))
       showElement("slider")
+      showTab("tabs","Output")
+      
+      # Create and output results table
+      if (input$fluid == "lw") {
+        column1 = c("Output Shell Temperature (K)","Output Tube Temperature (K)", HTML("&Delta;T Shell (K)"), 
+                    HTML("&Delta;T Tube (K)"), "Q (W)")
+        
+        if (sections %%2) {
+          outputshelltemp = mean(heatmapdata[1,(stepsPerSection*(sections-1)+1):(stepsPerSection*sections)])
+          outputtubetemp = sum(heatmapdata[seq(2,2*nrows,2),1]*Ntubes_row)/sum(Ntubes_row)
 
-
+        } else {
+          outputshelltemp = mean(heatmapdata[2*nrows+1,(stepsPerSection*(sections-1)+1):(stepsPerSection*sections)])
+          outputtubetemp = sum(heatmapdata[seq(2,2*nrows,2),1]*Ntubes_row)/sum(Ntubes_row)
+        }
+        deltas = outputshelltemp - input$Tsi
+        deltat = outputtubetemp - input$Tti  
+        
+        column2 = c(outputshelltemp,outputtubetemp,deltas,deltat, sum(Q,na.rm =T))
+        
+        
+      } else if (input$fluid == "vw") {
+        
+        column1 = c("Output Shell Temperature (K)","Output Tube Temperature (K)", HTML("&Delta;T Shell (K)"), 
+                    HTML("&Delta;T Tube (K)"), "Mass Condensed (kg/s)", "% Condensed", "Q (W)")
+        
+        if (sections %%2) {
+          outputshelltemp = mean(heatmapdata[1,(stepsPerSection*(sections-1)+1):(stepsPerSection*sections)])
+          outputtubetemp = sum(heatmapdata[seq(2,2*nrows,2),1]*Ntubes_row)/sum(Ntubes_row)
+          
+        } else {
+          outputshelltemp = mean(heatmapdata[2*nrows+1,(stepsPerSection*(sections-1)+1):(stepsPerSection*sections)])
+          outputtubetemp = sum(heatmapdata[seq(2,2*nrows,2),1]*Ntubes_row)/sum(Ntubes_row)
+        }
+        deltas = outputshelltemp - input$Tsi
+        deltat = outputtubetemp - input$Tti  
+        
+        column2 = c(outputshelltemp,outputtubetemp,deltas,deltat,sum(Mcond),sum(Mcond)/input$Fs*100, sum(Q,na.rm =T))
+        
+      }
+        
+      Results = data.frame(Parameter = column1, Value = column2)
+      
+      output$resulttable = renderTable(Results,digits = 6, sanitize.text.function = function(x) x)
+      
+      updateTabsetPanel(session, "tabs", selected = "Output")
+      
     })
     }
   })
-  observeEvent(input$slider,{
 
-  })
   
 }
