@@ -303,7 +303,7 @@ server = function(input,output,session){
       
       err = 1
       count = 1
-      while (err > 0.001) { 
+      while (err > input$error) { 
         # Create matrix containing all calclated temp values
         T_matrix = matrix(data = 0, ncol = input$modelsteps*3,nrow = input$modelsteps*3)
         
@@ -508,7 +508,7 @@ server = function(input,output,session){
       
       err = 1
       count = 1
-      while (err > 0.0001) { 
+      while (err > input$error && count <= input$iterations) { 
         
         # Create matrix containing all calculated temp values
         T_matrix = matrix(data = 0, ncol = stepsPerSection*sections*(3*nrows+1),nrow = stepsPerSection*sections*(3*nrows+1))
@@ -1244,8 +1244,7 @@ server = function(input,output,session){
           }
         }
         
-        testy <<- y
-        
+
         if (input$fluid == "vwe") {
           for (i in 1:(sections*stepsPerSection*(nrows+1))) {
             if (Temp[i] <= Tcond[i]) {
@@ -1327,7 +1326,7 @@ server = function(input,output,session){
         
         csline = list(
           type = "line",
-          line = list(width = 5,dash="dashdot", color = "white"),
+          line = list(width = 5,dash="dashdot", color = "#FFFFFF"),
           xref = "x",
           yref = "y",
           x0 = (input$slider/(0.5*input$L/(sections*stepsPerSection))-1)/2,
@@ -1539,9 +1538,10 @@ server = function(input,output,session){
         
       }
         
-      Results = data.frame(Parameter = column1, Value = column2)
+      Results = t(data.frame(column2))
+      colnames(Results) = column1
       
-      output$resulttable = renderTable(Results,digits = 6, sanitize.text.function = function(x) x)
+      output$resulttable = renderTable(Results,digits = 6, sanitize.text.function = function(x) x, align = 'c')
       
       updateTabsetPanel(session, "tabs", selected = "Output")
       
