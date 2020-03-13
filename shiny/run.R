@@ -22,6 +22,7 @@ usePackage("plotly")
 usePackage("deSolve")
 usePackage("bvpSolve")
 usePackage("pracma")
+usePackage("nleqslv")
 
 # Launch App
 runApp(appDir = AppLocation,launch.browser = T)
