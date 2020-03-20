@@ -24,7 +24,7 @@ ui = fluidPage(title = "HX Modelling", shinyjs::useShinyjs(),
                         numericInput("fracw", HTML("Inlet Water Vapour Mass Fraction"),"", value = NA)
                  ),
                  column(1),
-                 column(3, align = "center", style = "height:675px;background-color:#f5f5f5;border-color:#E0E0E0;border-style:inset;",
+                 column(4, align = "center", style = "height:675px;background-color:#f5f5f5;border-color:#E0E0E0;border-style:inset;",
                         titlePanel(strong("Dimensions")),
                         numericInput("tid", HTML("Tube Inner Diameter (m)"),"", value = 0.014453),
                         numericInput("tt", HTML("Tube Thickness (m)"),"", value = 0.001422),

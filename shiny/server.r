@@ -63,7 +63,7 @@ server = function(input,output,session){
     
     # Liquid ethanol properties
     dens_le = function(Temp) {
-    
+      
       y = 1.6288/(0.27469^(1+(1-Temp/514)^0.23178)) # mol/dm^3
       y = y*46.068 # kg/m3
       return(y)
@@ -204,7 +204,7 @@ server = function(input,output,session){
       x = x/(18.015)/(x/18.015+(1-x)/46.068)
       
       vE = x*(1-x)*(A + B*(1-2*(1-x)) + C*(1-2*(1-x))^2)/1000000 # m3/mol
-
+      
       MW = (x*18.015+(1-x)*46.068)/1000 # kg/mol
       
       d = MW/(vE+(x*0.018015)/dens_lw(Temp)+((1-x)*0.046068)/dens_le(Temp)) # kg/m3
@@ -270,7 +270,7 @@ server = function(input,output,session){
       z = 330.33*x^6 - 892.47*x^5 + 978.2*x^4 - 535.54*x^3 + 154.3*x^2 - 13.25*x + 78.319 + 273.15 - Tcond
       return(z)    
     }
-
+    
     # Double-pipe or shell and tube, no baffles --------------------------------------------------------------------------------------------  
     if (input$baffles == 0) {withProgress(value = 0.5, message = "Calculation in progress...",{
       
@@ -570,7 +570,7 @@ server = function(input,output,session){
             }
           }
         }
-    
+        
         
         # Properties
         Dens = dens_lw(Temp)
@@ -867,11 +867,13 @@ server = function(input,output,session){
         # Shell for the shell equation (downward flow)
         for (i in seq(1+stepsPerSection*sections,sections*stepsPerSection*2,by = stepsPerSection*2)) {
           for (j in seq(0,(length(Ntubes_row)-1)*sections*stepsPerSection,by = sections*stepsPerSection)) {
-            if (count %%2 == 0 && Temp[i+j] <= Tcond[i+j] && (input$fluid == "vw" || input$fluid == "vwe")) {
-              T_matrix[(i+j):(stepsPerSection+i+j-1),(i+j):(stepsPerSection+i+j-1)] = diag(stepsPerSection)*shellCoefficient2[(i+j):(stepsPerSection+i+j-1)]
-            } else {
-              T_matrix[(i+j):(stepsPerSection+i+j-1),(i+j):(stepsPerSection+i+j-1)] = diag(stepsPerSection)*shellCoefficient2[(i+j-sections*stepsPerSection):(stepsPerSection+i+j-1-sections*stepsPerSection)]
-              T_matrix[(i+j):(stepsPerSection+i+j-1),(i+j-sections*stepsPerSection):(i+j-sections*stepsPerSection+stepsPerSection-1)] = diag(stepsPerSection)*shellCoefficient1[(i+j-sections*stepsPerSection):(stepsPerSection+i+j-1-sections*stepsPerSection)]
+            for (k in seq(0,stepsPerSection-1,by = 1)) {
+              if (count %%2 == 0 && Temp[i+j+k] <= Tcond[i+j+k] && (input$fluid == "vw" || input$fluid == "vwe")) {
+                T_matrix[(i+j+k),(i+j+k)] = shellCoefficient2[i+j+k]
+              } else {
+                T_matrix[(i+j+k),(i+j+k)] = shellCoefficient2[(i+j+k-sections*stepsPerSection)]
+                T_matrix[(i+j+k),(i+j+k-sections*stepsPerSection)] = shellCoefficient1[(i+j+k-sections*stepsPerSection)]
+              }
             }
           }
         }
@@ -880,11 +882,13 @@ server = function(input,output,session){
         # Shell for the shell equation (upward flow)
         for (i in seq(1+stepsPerSection,sections*stepsPerSection,by = stepsPerSection*2)) {
           for (j in seq(0,(length(Ntubes_row)-1)*sections*stepsPerSection,by = sections*stepsPerSection)) {
-            if (count %%2 == 0 && Temp[i+j] <= Tcond[i+j] && (input$fluid == "vw" || input$fluid == "vwe")) {
-              T_matrix[(i+j):(stepsPerSection+i+j-1),(i+j):(stepsPerSection+i+j-1)] = diag(stepsPerSection)*shellCoefficient2[(i+j):(stepsPerSection+i+j-1)]
-            } else {
-              T_matrix[(i+j):(stepsPerSection+i+j-1),(i+j):(stepsPerSection+i+j-1)] = diag(stepsPerSection)*shellCoefficient2[(i+j+sections*stepsPerSection):(stepsPerSection+i+j-1+sections*stepsPerSection)]
-              T_matrix[(i+j):(stepsPerSection+i+j-1),(i+j+sections*stepsPerSection):(i+j+sections*stepsPerSection+stepsPerSection-1)] = diag(stepsPerSection)*shellCoefficient1[(i+j+sections*stepsPerSection):(stepsPerSection+i+j-1+sections*stepsPerSection)]
+            for (k in seq(0,stepsPerSection-1,by = 1)) {
+              if (count %%2 == 0 && Temp[i+j+k] <= Tcond[i+j+k] && (input$fluid == "vw" || input$fluid == "vwe")) {
+                T_matrix[(i+j+k),(i+j+k)] = shellCoefficient2[(i+j+k)]
+              } else {
+                T_matrix[(i+j+k),(i+j+k)] = shellCoefficient2[(i+j+k+sections*stepsPerSection)]
+                T_matrix[(i+j+k),(i+j+k+sections*stepsPerSection)] = shellCoefficient1[(i+j+k+sections*stepsPerSection)]
+              }
             }
           }
         }
@@ -893,10 +897,12 @@ server = function(input,output,session){
         # Wall part for the shell equation (downward flow)
         for (i in seq(1+stepsPerSection*sections,sections*stepsPerSection*2,by = stepsPerSection*2)) {
           for (j in seq(0,(length(Ntubes_row)-1)*sections*stepsPerSection,by = sections*stepsPerSection)) {
-            if (count %%2 == 0 && Temp[i+j] <= Tcond[i+j] && (input$fluid == "vw" || input$fluid == "vwe")) {
-              T_matrix[(i+j),(i+j+stepsPerSection*sections*(2*nrows))] = shellCoefficient3[i+j]
-            } else {
-              T_matrix[(i+j):(stepsPerSection+i+j-1),(sections*stepsPerSection*2*length(Ntubes_row)+i+j):(sections*stepsPerSection*2*length(Ntubes_row)+i+j+stepsPerSection-1)] = diag(stepsPerSection)*shellCoefficient3[(i+j-sections*stepsPerSection):(stepsPerSection+i+j-1-sections*stepsPerSection)]
+            for (k in seq(0,stepsPerSection-1,by = 1)) {
+              if (count %%2 == 0 && Temp[i+j+k] <= Tcond[i+j+k] && (input$fluid == "vw" || input$fluid == "vwe")) {
+                T_matrix[(i+j+k),(i+j+k+stepsPerSection*sections*(2*nrows))] = shellCoefficient3[i+j+k]
+              } else {
+                T_matrix[(i+j+k),(sections*stepsPerSection*2*length(Ntubes_row)+i+j+k)] = shellCoefficient3[(i+j+k-sections*stepsPerSection)]
+              }
             }
           }
         }
@@ -905,10 +911,12 @@ server = function(input,output,session){
         # Wall part for the shell equation (upward flow)
         for (i in seq(1+stepsPerSection,sections*stepsPerSection,by = stepsPerSection*2)) {
           for (j in seq(0,(length(Ntubes_row)-1)*sections*stepsPerSection,by = sections*stepsPerSection)) {
-            if (count %%2 == 0 && Temp[i+j] <= Tcond[i+j] && (input$fluid == "vw" || input$fluid == "vwe")) {
-              T_matrix[(i+j),(i+j+stepsPerSection*sections*(2*nrows+1))] = shellCoefficient3[i+j]
-            } else {
-              T_matrix[(i+j):(stepsPerSection+i+j-1),(sections*stepsPerSection*(2*length(Ntubes_row)+1)+i+j):(sections*stepsPerSection*(2*length(Ntubes_row)+1)+i+j+stepsPerSection-1)] = diag(stepsPerSection)*shellCoefficient3[(i+j+sections*stepsPerSection):(stepsPerSection+i+j-1+sections*stepsPerSection)]  
+            for (k in seq(0,stepsPerSection-1,by = 1)) {
+              if (count %%2 == 0 && Temp[i+j+k] <= Tcond[i+j+k] && (input$fluid == "vw" || input$fluid == "vwe")) {
+                T_matrix[(i+j+k),(i+j+k+stepsPerSection*sections*(2*nrows+1))] = shellCoefficient3[i+j+k]
+              } else {
+                T_matrix[(i+j+k),(sections*stepsPerSection*(2*length(Ntubes_row)+1)+i+j+k)] = shellCoefficient3[(i+j+k+sections*stepsPerSection)]  
+              }
             }
           }
         }
@@ -964,6 +972,7 @@ server = function(input,output,session){
         testmatrix <<- T_matrix
         testb <<- rhs_vector
         testshell1 <<-shellCoefficient1
+        testshell2 <<-shellCoefficient2
         testwall1 <<-wallCoefficient1
         
         # Solve matrix problem using LU decomposition
@@ -1057,7 +1066,7 @@ server = function(input,output,session){
                 }
               }
             }
-              
+            
             for (i in seq(1+stepsPerSection,sections*stepsPerSection,by = stepsPerSection*2)) {
               
               Mcond[i:(i+stepsPerSection-1)] = 0
@@ -1172,7 +1181,7 @@ server = function(input,output,session){
                     return(temp)
                   }
                   yfinal = nleqslv(0.5, tempFunc)$x
-
+                  
                   y[((i-1)*stepsPerSection+1+(k-1)*stepsPerSection*sections):(i*stepsPerSection+(k-1)*stepsPerSection*sections)] = 
                     yfinal
                   
@@ -1189,9 +1198,9 @@ server = function(input,output,session){
                   
                   y[((i-1)*stepsPerSection+1+(k-1)*stepsPerSection*sections):(i*stepsPerSection+(k-1)*stepsPerSection*sections)] = 
                     (Fs[((i-1)*stepsPerSection +1+k*stepsPerSection*sections):(i*stepsPerSection+k*stepsPerSection*sections)]*
-                    y[((i-1)*stepsPerSection +1+k*stepsPerSection*sections):(i*stepsPerSection+k*stepsPerSection*sections)]-
-                    Mcond[((i-1)*stepsPerSection +1+k*stepsPerSection*sections):(i*stepsPerSection+k*stepsPerSection*sections)]*
-                    x[((i-1)*stepsPerSection +1+k*stepsPerSection*sections):(i*stepsPerSection+k*stepsPerSection*sections)])/
+                       y[((i-1)*stepsPerSection +1+k*stepsPerSection*sections):(i*stepsPerSection+k*stepsPerSection*sections)]-
+                       Mcond[((i-1)*stepsPerSection +1+k*stepsPerSection*sections):(i*stepsPerSection+k*stepsPerSection*sections)]*
+                       x[((i-1)*stepsPerSection +1+k*stepsPerSection*sections):(i*stepsPerSection+k*stepsPerSection*sections)])/
                     Fs[((i-1)*stepsPerSection+1+(k-1)*stepsPerSection*sections):(i*stepsPerSection+(k-1)*stepsPerSection*sections)]
                   
                   if (any(y[((i-1)*stepsPerSection+1+(k-1)*stepsPerSection*sections):(i*stepsPerSection+(k-1)*stepsPerSection*sections)] <= yfinal)) {
@@ -1213,7 +1222,7 @@ server = function(input,output,session){
                     return(temp)
                   }
                   yfinal = nleqslv(0.5, tempFunc)$x
-
+                  
                   y[((i-1)*stepsPerSection +1+(j-1)*stepsPerSection*sections):(i*stepsPerSection+(j-1)*stepsPerSection*sections)] = 
                     yfinal
                   
@@ -1229,14 +1238,14 @@ server = function(input,output,session){
                   
                   y[((i-1)*stepsPerSection +1+(j-1)*stepsPerSection*sections):(i*stepsPerSection+(j-1)*stepsPerSection*sections)] = 
                     (Fs[((i-1)*stepsPerSection +1+(j-2)*stepsPerSection*sections):(i*stepsPerSection+(j-2)*stepsPerSection*sections)]*
-                    y[((i-1)*stepsPerSection +1+(j-2)*stepsPerSection*sections):(i*stepsPerSection+(j-2)*stepsPerSection*sections)]-
-                    Mcond[((i-1)*stepsPerSection +1+(j-2)*stepsPerSection*sections):(i*stepsPerSection+(j-2)*stepsPerSection*sections)]*
-                    x[((i-1)*stepsPerSection +1+(j-2)*stepsPerSection*sections):(i*stepsPerSection+(j-2)*stepsPerSection*sections)])/
+                       y[((i-1)*stepsPerSection +1+(j-2)*stepsPerSection*sections):(i*stepsPerSection+(j-2)*stepsPerSection*sections)]-
+                       Mcond[((i-1)*stepsPerSection +1+(j-2)*stepsPerSection*sections):(i*stepsPerSection+(j-2)*stepsPerSection*sections)]*
+                       x[((i-1)*stepsPerSection +1+(j-2)*stepsPerSection*sections):(i*stepsPerSection+(j-2)*stepsPerSection*sections)])/
                     Fs[((i-1)*stepsPerSection +1+(j-1)*stepsPerSection*sections):(i*stepsPerSection+(j-1)*stepsPerSection*sections)]
                   
                   if (any(y[((i-1)*stepsPerSection +1+(j-1)*stepsPerSection*sections):(i*stepsPerSection+(j-1)*stepsPerSection*sections)] <= yfinal)) {
                     y[((i-1)*stepsPerSection +1+(j-1)*stepsPerSection*sections):(i*stepsPerSection+(j-1)*stepsPerSection*sections)] = 
-                    yfinal
+                      yfinal
                   }
                 }
               }
@@ -1244,7 +1253,7 @@ server = function(input,output,session){
           }
         }
         
-
+        
         if (input$fluid == "vwe") {
           for (i in 1:(sections*stepsPerSection*(nrows+1))) {
             if (Temp[i] <= Tcond[i]) {
@@ -1252,7 +1261,6 @@ server = function(input,output,session){
             }
           }
         }
-        
         
         count = count + 1
         
@@ -1489,7 +1497,7 @@ server = function(input,output,session){
         if (sections %%2) {
           outputshelltemp = mean(heatmapdata[1,(stepsPerSection*(sections-1)+1):(stepsPerSection*sections)])
           outputtubetemp = sum(heatmapdata[seq(2,2*nrows,2),1]*Ntubes_row)/sum(Ntubes_row)
-
+          
         } else {
           outputshelltemp = mean(heatmapdata[2*nrows+1,(stepsPerSection*(sections-1)+1):(stepsPerSection*sections)])
           outputtubetemp = sum(heatmapdata[seq(2,2*nrows,2),1]*Ntubes_row)/sum(Ntubes_row)
@@ -1537,7 +1545,7 @@ server = function(input,output,session){
         column2 = c(outputshelltemp,outputtubetemp,deltas,deltat,sum(Mcond),sum(Mcond)/input$Fs*100, sum(Q_extended,na.rm =T))
         
       }
-        
+      
       Results = t(data.frame(column2))
       colnames(Results) = column1
       
@@ -1548,6 +1556,6 @@ server = function(input,output,session){
     })
     }
   })
-
+  
   
 }
